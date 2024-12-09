@@ -2,6 +2,8 @@ library(ncdf4)
 library(tidync)
 library(tidyverse)
 
+# Old data ----------------------------------------------------------------
+
 nc_data_physics_ice <- tidync("cmems_mod_bal_phy_my_P1D-m_multi-vars_9.04E-30.21E_53.01N-65.89N_2008-01-01-2009-12-31.nc")
 
 physics_ice_data <- nc_data_physics_ice |>
@@ -10,8 +12,7 @@ physics_ice_data <- nc_data_physics_ice |>
   select(sla, siconc, sithick, longitude, latitude, time) |>
   mutate(time = as.Date(time, origin = "1970-01-01"))
 
-# Convert longitude and latitude to numeric --------------------------------
-
+# Convert longitude and latitude to numeric
 physics_ice_data <- physics_ice_data |> 
   mutate(
     longitude = as.numeric(longitude),
@@ -43,8 +44,7 @@ physics_sea_data <- nc_data_physics_sea |>
   select(thetao, uo, vo, longitude, latitude, time) |>
   mutate(time = as.Date(time, origin = "1970-01-01"))
 
-# Convert longitude and latitude to numeric --------------------------------
-
+# Convert longitude and latitude to numeric
 physics_sea_data <- physics_sea_data |> 
   mutate(
     longitude = as.numeric(longitude),
@@ -86,7 +86,6 @@ write_rds(combined_data, "combined_data.rds")
 
 combined_data <- read_rds("combined_data.rds")
 
-
 # New more detailed datasets -----------------------------------------------
 
 nc_data_waves <- tidync("data_stream-wave.nc")
@@ -97,7 +96,7 @@ waves_data <- nc_data_waves |>
   select(mwd, mwp, swh, p140209, hmax, tauoc, pp1d, shww, longitude, latitude, valid_time) |>
   mutate(valid_time = as.POSIXct(valid_time, origin = "1970-01-01", tz = "UTC"))
 
-# Convert longitude and latitude to numeric --------------------------------
+# Convert longitude and latitude to numeric
 waves_data <- waves_data |> 
   mutate(
     longitude = as.numeric(longitude),
@@ -767,34 +766,6 @@ plot2 <- ggplot(baltic_data, aes(x = air_density_over_oceans, y = max_individual
     plot.caption = element_text(size = 8, hjust = 1)
   )
 
-# Feature selection -------------------------------------------------------
-library(caret)
-library(reshape2)
-
-# Calculate variance for numeric normalized variables
-baltic_data_variances <- baltic_data |>
-  summarize(across(where(is.numeric), \(x) var(x, na.rm = TRUE)))
-
-# Sort the variances for easier interpretation
-baltic_data_variances <- baltic_data_variances |>
-  pivot_longer(cols = everything(), 
-               names_to = "Feature", 
-               values_to = "Variance",
-               values_drop_na = TRUE) |>
-  arrange(desc(Variance))
-
-options(scipen = 999)
-
-# Define a threshold
-variance_threshold <- 0.01
-
-# Filter out features below the threshold
-selected_features <- baltic_data_variances |>
-  filter(Variance >= variance_threshold)
-
-# Extract the feature names from `selected_features`
-selected_feature_names <- selected_features$Feature
-
 # Time-series plots -------------------------------------------------------
 library(TSstudio)
 
@@ -936,13 +907,44 @@ baltic_data_scales <- baltic_data_normalized |>
 
 table(baltic_data_scales)
 
+# Feature selection -------------------------------------------------------
+library(caret)
+library(reshape2)
+
+# Calculate variance for numeric variables
+baltic_data_variances <- baltic_data |>
+  summarize(across(where(is.numeric), \(x) var(x, na.rm = TRUE)))
+
+# Sort the variances for easier interpretation
+baltic_data_variances <- baltic_data_variances |>
+  pivot_longer(cols = everything(), 
+               names_to = "Feature", 
+               values_to = "Variance",
+               values_drop_na = TRUE) |>
+  arrange(desc(Variance))
+
+options(scipen = 999)
+
+# Define a threshold
+variance_threshold <- 0.01
+
+# Filter out features below the threshold
+selected_features <- baltic_data_variances |>
+  filter(Variance >= variance_threshold)
+
+# Extract the feature names from `selected_features`
+selected_feature_names <- selected_features$Feature
+
 # Modeling ----------------------------------------------------------------
-library(prophet)
 library(forecast)
 library(TTR)
-
 library(geosphere)
 library(sp)
+library(zoo)
+library(paletteer)
+library(lubridate)
+
+baltic_data_model <- read_rds("../baltic_data_model.rds")
 
 # Define start and end points
 start <- c(18.0, 55.0)  # Longitude, Latitude
@@ -961,9 +963,6 @@ ggplot(route_df, aes(x = longitude, y = latitude)) +
   geom_point() +
   labs(title = "Route from Start to End", x = "Longitude", y = "Latitude") +
   theme_minimal()
-
-library(zoo)
-library(paletteer)
 
 # Filter data for 2012
 training_data <- baltic_data_model |>
@@ -1038,13 +1037,6 @@ forecast_results |>
   theme_minimal()
 
 # All variables
-library(zoo)
-library(TTR)
-library(dplyr)
-library(lubridate)
-library(tidyr)
-library(ggplot2)
-library(paletteer)
 
 # Filter data for 2012
 training_data <- baltic_data_model |>
@@ -1060,14 +1052,14 @@ grouped_data <- training_data |>
   group_split()
 
 # Define WMA window size
-window_size <- 3  # e.g. 3 observations per day (06:00, 12:00, 18:00)
+window_size <- 2  # for example, 3 observations per day (06:00, 12:00, 18:00)
 # Define forecast horizon: 31 days * 3 obs/day = 93 predictions
 future_length <- 31 * 3
 
 # Generate future timestamps for January 2024
 future_dates <- seq.Date(
-  from = as.Date("2024-01-01"),
-  to = as.Date("2024-01-31"),
+  from = as.Date("2013-01-01"),
+  to = as.Date("2013-01-31"),
   by = "day"
 )
 
@@ -1075,7 +1067,8 @@ future_times <- as.POSIXct(
   paste(
     rep(future_dates, each = 3),
     rep(c("06:00:00", "12:00:00", "18:00:00"), times = length(future_dates))
-  )
+  ),
+  tz = "UTC"
 )
 
 # Initialize list to store results
@@ -1137,8 +1130,8 @@ forecast_results <- bind_rows(results)
 
 # Example Visualization for a single variable at a specific timestamp
 forecast_results |>
-  filter(time == as.POSIXct("2024-01-08 06:00:00")) |>
-  ggplot(aes(x = longitude, y = latitude, fill = predicted_wavelength)) +
+  filter(time == as.POSIXct("2013-01-03 06:00:00", tz = "UTC")) |>
+  ggplot(aes(x = longitude, y = latitude, fill = predicted_wind_speed)) +
   geom_tile() +
   scale_fill_paletteer_c("ggthemes::Blue-Teal") +
   labs(
@@ -1148,4 +1141,43 @@ forecast_results |>
     fill = "Wind Speed"
   ) +
   theme_minimal()
+
+# Step 1: Filter Actual Data for January 2013
+actual_data_jan_2013 <- baltic_data_model |>
+  filter(year(time) == 2013, month(time) == 1) |>
+  select(latitude, longitude, time, wind_speed)  # Focus on wind_speed
+
+# Step 2: Filter Predicted Data for January 2013
+forecast_results_jan_2013 <- forecast_results |>
+  filter(year(time) == 2013, month(time) == 1) |>
+  select(latitude, longitude, time, predicted_wind_speed)
+
+forecast_results_jan_2013 <- forecast_results_jan_2013 |>
+  arrange(latitude, longitude, time)
+
+actual_data_jan_2013 <- actual_data_jan_2013 |>
+  arrange(latitude, longitude, time)
+
+# Step 3: Join Predicted and Actual Data
+comparison <- forecast_results_jan_2013 |>
+  inner_join(actual_data_jan_2013, by = c("latitude", "longitude", "time")) |>
+  rename(predicted = predicted_wind_speed, actual = wind_speed)
+
+MAE <- mean(abs(comparison$predicted - comparison$actual), na.rm = TRUE)
+RMSE <- sqrt(mean((comparison$predicted - comparison$actual)^2, na.rm = TRUE))
+
+# Print metrics
+print(MAE)
+print(RMSE)
+
+ggplot(comparison, aes(x = actual, y = predicted)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_abline(slope = 1, intercept = 0, color = "red") +
+  labs(
+    title = "Predicted vs. Actual Wind Speeds (January 2013)",
+    x = "Actual Wind Speed",
+    y = "Predicted Wind Speed"
+  ) +
+  theme_minimal()
+
 
