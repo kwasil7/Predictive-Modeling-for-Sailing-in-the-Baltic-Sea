@@ -1052,7 +1052,7 @@ grouped_data <- training_data |>
   group_split()
 
 # Define WMA window size
-window_size <- 2  # for example, 3 observations per day (06:00, 12:00, 18:00)
+window_size <- 3  # for example, 3 observations per day (06:00, 12:00, 18:00)
 # Define forecast horizon: 31 days * 3 obs/day = 93 predictions
 future_length <- 31 * 3
 
@@ -1130,7 +1130,7 @@ forecast_results <- bind_rows(results)
 
 # Example Visualization for a single variable at a specific timestamp
 forecast_results |>
-  filter(time == as.POSIXct("2013-01-03 06:00:00", tz = "UTC")) |>
+  filter(time == as.POSIXct("2013-01-01 06:00:00", tz = "UTC")) |>
   ggplot(aes(x = longitude, y = latitude, fill = predicted_wind_speed)) +
   geom_tile() +
   scale_fill_paletteer_c("ggthemes::Blue-Teal") +
