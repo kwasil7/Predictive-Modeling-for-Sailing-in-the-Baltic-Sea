@@ -317,7 +317,7 @@ baltic_data <- baltic_data |>
     ), ordered = TRUE)
   )
 
-# New indexes
+# New indexes for thunderstorm likelihood
 nc_data_indexes <- tidync("k_index_total_totals_index.nc")
 
 indexes_data <- nc_data_indexes |>
@@ -454,31 +454,6 @@ baltic_data_labeled <- baltic_data_labeled |>
   )
 
 baltic_data_labeled <- read_rds("baltic_data_labeled.rds")
-
-# Cleaning the labeled dataset for modeling ---------------------------------------
-
-baltic_data_model <- baltic_data_labeled |>
-  select(-c(total_column_cloud_liquid_water, wind_stress, 
-            total_column_cloud_ice_water, normalized_stress_into_ocean,
-            air_density_over_oceans, total_column_rain_water, wave_steepness,
-            total_precipitation, convective_precipitation, large_scale_precipitation,
-            mean_snowfall_rate, mean_total_precipitation_rate, convective_rain_rate,
-            large_scale_rain_rate, snowfall))
-
-baltic_data_model <- baltic_data_model |>
-  select(-c(u10_wind_component, v10_wind_component, 
-            u10_neutral_wind_component, v10_neutral_wind_component,
-            cloud_base_height, total_column_water_vapour))
-
-write_rds(baltic_data_model, "baltic_data_model.rds")
-
-baltic_data_labeled <- read_rds("baltic_data_labeled.rds")
-
-baltic_data <- read_rds("baltic_data.rds")
-
-baltic_data_normalized <- read_rds("baltic_data_normalized.rds")
-
-baltic_data_model <- read_rds("baltic_data_model.rds")
 
 # Plots -------------------------------------------------------------------
 library(openair)
@@ -934,6 +909,31 @@ selected_features <- baltic_data_variances |>
 
 # Extract the feature names from `selected_features`
 selected_feature_names <- selected_features$Feature
+
+# Cleaning the labeled dataset for modeling ---------------------------------------
+
+baltic_data_model <- baltic_data_labeled |>
+  select(-c(total_column_cloud_liquid_water, wind_stress, 
+            total_column_cloud_ice_water, normalized_stress_into_ocean,
+            air_density_over_oceans, total_column_rain_water, wave_steepness,
+            total_precipitation, convective_precipitation, large_scale_precipitation,
+            mean_snowfall_rate, mean_total_precipitation_rate, convective_rain_rate,
+            large_scale_rain_rate, snowfall))
+
+baltic_data_model <- baltic_data_model |>
+  select(-c(u10_wind_component, v10_wind_component, 
+            u10_neutral_wind_component, v10_neutral_wind_component,
+            cloud_base_height, total_column_water_vapour))
+
+write_rds(baltic_data_model, "baltic_data_model.rds")
+
+baltic_data_labeled <- read_rds("baltic_data_labeled.rds")
+
+baltic_data <- read_rds("baltic_data.rds")
+
+baltic_data_normalized <- read_rds("baltic_data_normalized.rds")
+
+baltic_data_model <- read_rds("baltic_data_model.rds")
 
 # Modeling ----------------------------------------------------------------
 library(forecast)
