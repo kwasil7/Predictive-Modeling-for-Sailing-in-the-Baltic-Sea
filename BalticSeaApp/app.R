@@ -7,26 +7,59 @@ library(shiny)
 library(leaflet)
 library(geosphere)
 library(dplyr)
+library(sp)
+library(tidyverse)
+
+# Load the dataset during app initialization
+baltic_data <- read_rds("baltic_data_for_shiny/baltic_data_model.rds")
+
+# Glimpse the dataset in the console to confirm it's loaded
+print(glimpse(baltic_data))
 
 # Define UI
-ui <- fluidPage(
-  titlePanel("Dynamic Sailing Route with Multiple Via Points"),
+ui <- navbarPage(
+  "Baltic Sea Safety App",
   
-  sidebarLayout(
-    sidebarPanel(
-      radioButtons("point_type", "Point to select:",
-                   choices = c("Start", "Via", "End"),
-                   inline = TRUE),
-      
-      actionButton("add_point", "Add Point"),
-      actionButton("clear_route", "Clear Route"),
-      actionButton("plot_route", "Plot Route"),
-      actionButton("save_points", "Save Selected Points as Tibble")
-    ),
-    mainPanel(
-      leafletOutput("route_map", height = "600px"),
-      tableOutput("route_table"),
-      verbatimTextOutput("saved_message")
+  # Tab 1: Route Selection
+  tabPanel(
+    "Route Selection",
+    sidebarLayout(
+      sidebarPanel(
+        radioButtons("point_type", "Point to select:",
+                     choices = c("Start", "Via", "End"),
+                     inline = TRUE),
+        actionButton("add_point", "Add Point"),
+        actionButton("clear_route", "Clear Route"),
+        actionButton("plot_route", "Plot Route"),
+        actionButton("save_points", "Save Selected Points as Tibble")
+      ),
+      mainPanel(
+        leafletOutput("route_map", height = "600px"),
+        tableOutput("route_table"),
+        verbatimTextOutput("saved_message")
+      )
+    )
+  ),
+  
+  # Tab 2: Plots
+  tabPanel(
+    "Plots",
+    sidebarLayout(
+      sidebarPanel(
+        selectInput("plot_var", "Select Variable to Plot:",
+                    choices = c("Wind speed" = "wind_speed",
+                                "Wave height" = "significant_height_combined_waves_swell",
+                                "Mean wave period" = "mean_wave_period")),
+        sliderInput("time_range", "Time Range:",
+                    min = as.Date("2012-01-01"),
+                    max = as.Date("2013-12-31"),
+                    value = c(as.Date("2012-01-01"), as.Date("2013-12-31")),
+                    timeFormat = "%Y-%m-%d")
+      ),
+      mainPanel(
+        plotOutput("plot_output"),
+        verbatimTextOutput("plot_summary")
+      )
     )
   )
 )
@@ -128,6 +161,31 @@ server <- function(input, output, session) {
   # Initial map rendering
   output$route_map <- renderLeaflet({
     leaflet() |> addTiles() |> setView(lng = 18.5, lat = 55.5, zoom = 6)
+  })
+  
+  #Plot logic
+  # Reactive expression to filter the data based on the selected time range
+  filtered_data <- reactive({
+    baltic_data |>
+      filter(as.Date(time) >= input$time_range[1] & as.Date(time) <= input$time_range[2])
+  })
+  
+  output$plot_output <- renderPlot({
+    data <- filtered_data()
+    
+    ggplot(data, aes(x = as.Date(time), y = .data[[input$plot_var]])) +
+      geom_line(color = "blue") +
+      theme_minimal() +
+      labs(
+        title = paste("Trend of", input$plot_var, "over time"),
+        x = "Date",
+        y = gsub("_", " ", input$plot_var, fixed = TRUE)
+      ) +
+      theme(
+        plot.title = element_text(size = 16, face = "bold"),
+        axis.title.x = element_text(size = 12),
+        axis.title.y = element_text(size = 12)
+      )
   })
 }
 

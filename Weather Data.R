@@ -1038,25 +1038,27 @@ forecast_results |>
 
 # All variables
 
-# Filter data for 2012
+# Filter data to only include 2012. Predictions will be based on this
 training_data <- baltic_data_model |>
   filter(year(time) == 2012)
 
-# Identify numeric variables to forecast
+# Identify numeric variables to forecast excluding coordinates
 numeric_vars <- names(training_data)[sapply(training_data, is.numeric)]
 numeric_vars <- setdiff(numeric_vars, c("latitude", "longitude"))
 
-# Group by latitude and longitude
+# Group by latitude and longitude and split into a list of data frames. Each
+# element represents data for a specific location (pair of coordinates)
 grouped_data <- training_data |>
   group_by(latitude, longitude) |>
   group_split()
 
 # Define WMA window size
+# The number of data points that are used for the averaging process
 window_size <- 3  # for example, 3 observations per day (06:00, 12:00, 18:00)
-# Define forecast horizon: 31 days * 3 obs/day = 93 predictions
+# Define forecast horizon: 31 days * 3 obs/day = 93 predictions - whole month
 future_length <- 31 * 3
 
-# Generate future timestamps for January 2024
+# Generate future timestamps for January 2013
 future_dates <- seq.Date(
   from = as.Date("2013-01-01"),
   to = as.Date("2013-01-31"),
@@ -1074,8 +1076,10 @@ future_times <- as.POSIXct(
 # Initialize list to store results
 results <- vector("list", length(grouped_data))
 
-# Loop through each spatial group
-for (i in seq_along(grouped_data)) {
+# Loop through each location
+# The seq_along() function is used for generating a sequence of elements the same 
+# as that of the length of the input vector.
+for (i in seq_along(grouped_data)) { 
   loc_data <- grouped_data[[i]] |>
     arrange(time)
   
@@ -1092,8 +1096,9 @@ for (i in seq_along(grouped_data)) {
     # Interpolate missing values
     ts_data <- na.approx(ts_data, rule = 2)
     
-    # Generate forecasts using a rolling WMA
+    # Generate forecasts using WMA
     wma_forecasts <- numeric(future_length)
+    # For each future time step j
     for (j in seq_along(wma_forecasts)) {
       recent_values <- c(ts_data, wma_forecasts[1:(j - 1)])
       # Interpolate again in case any NAs appear after combining
