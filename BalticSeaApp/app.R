@@ -84,13 +84,10 @@ ui <- navbarPage(
         selectInput(
           "atmos_variable_group", "Select variables to predict:",
           choices = list(
-            "Wind Speed" = "wind_speed",
-            "All Atmospheric Variables" = c("wind_speed", "mean_sea_level_pressure", 
-                                            "sea_surface_temperature", "low_cloud_cover", 
-                                            "total_cloud_cover")
+            "Basic variables (safety-related)" = "basic",
+            "All atmospheric variables" = "all_atmos"
           ),
-          selected = "wind_speed",
-          multiple = TRUE
+          selected = "basic"
         ),
         actionButton("atmos_predict", "Predict Variables")
       ),
@@ -131,6 +128,23 @@ server <- function(input, output, session) {
   # Display selected variables for debugging
   observe({
     print(selected_variables())
+  })
+  
+  # Define atmospheric variable groups (tab 3)
+  atmos_variable_groups <- list(
+    basic = c("wind_speed", "sea_ice_concentration"),
+    all_atmos = c("wind_speed", "mean_sea_level_pressure", 
+                  "sea_surface_temperature", "surface_pressure",
+                  "max_wind_gust", "instantaneous_wind_gust",
+                  "low_cloud_cover", "total_cloud_cover", 
+                  "precipitation_type", 
+                  "convective_available_potential_energy",
+                  "sea_ice_concentration")
+  )
+  
+  # Reactive expression for selected variables
+  atmos_selected_variables <- reactive({
+    atmos_variable_groups[[input$atmos_variable_group]]
   })
   
   # Reactive storage for forecast results
