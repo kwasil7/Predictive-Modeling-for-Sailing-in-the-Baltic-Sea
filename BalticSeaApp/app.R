@@ -37,7 +37,8 @@ ui <- navbarPage(
         leafletOutput("route_map", height = "600px"),
         tableOutput("route_table"),
         verbatimTextOutput("saved_message"),
-        tableOutput("prediction_table"),  # Placeholder for the predicted results table
+        plotOutput("safety_map", height = "800px", width = "1200px"),
+        tableOutput("prediction_table")  # Placeholder for the predicted results table
       )
     ),
     selectInput(
@@ -73,11 +74,41 @@ ui <- navbarPage(
         verbatimTextOutput("plot_summary")
       )
     )
+  ),
+  
+  # Tab 3: only atmospheric data 0.25 degrees
+  tabPanel(
+    "Atmospheric Data 0.25 Degrees",
+    sidebarLayout(
+      sidebarPanel(
+        selectInput(
+          "atmos_variable_group", "Select variables to predict:",
+          choices = list(
+            "Wind Speed" = "wind_speed",
+            "All Atmospheric Variables" = c("wind_speed", "mean_sea_level_pressure", 
+                                            "sea_surface_temperature", "low_cloud_cover", 
+                                            "total_cloud_cover")
+          ),
+          selected = "wind_speed",
+          multiple = TRUE
+        ),
+        actionButton("atmos_predict", "Predict Variables")
+      ),
+      mainPanel(
+        plotOutput("atmos_safety_map", height = "800px", width = "1200px"),
+        tableOutput("atmos_prediction_table")
+      )
+    )
   )
 )
 
 library(zoo)
 library(TTR)
+library(paletteer)
+
+# Use in a ggplot2 chart:
+scale_colour_paletteer_d("ggsci::light_blue_material")
+scale_fill_paletteer_d("ggsci::light_blue_material")
 
 # Define Server Logic
 server <- function(input, output, session) {
@@ -109,6 +140,8 @@ server <- function(input, output, session) {
   observeEvent(input$start_prediction, {
     # Ensure a group is selected
     req(selected_variables())
+    req(points$route)  # Ensure route exists
+    print("Using selected route for predictions...")
     print("Starting predictions...")  # Debugging message
     
     # Get the selected variables
@@ -116,7 +149,11 @@ server <- function(input, output, session) {
     
     # Filter data to only include 2012
     training_data <- baltic_data |>
-      filter(year(time) == 2012)
+      filter(
+        latitude %in% points$route$latitude,
+        longitude %in% points$route$longitude,
+        year(time) == 2012
+      )
     print("Training data filtered.")
     
     # Group by latitude and longitude
@@ -196,12 +233,73 @@ server <- function(input, output, session) {
     print("Predictions complete.")
     print("Updated forecast_results:")
     print(head(forecast_results()))
+    
+    forecast_results <- forecast_results() |> 
+      mutate(
+        safety_label = case_when(
+          predicted_wind_speed >= 10.8 ~ "Unsafe",
+          predicted_significant_height_combined_waves_swell >= 3 ~ "Unsafe",
+          predicted_sea_ice_concentration > 0.3 ~ "Risky",
+          predicted_wind_speed >= 8.0 & predicted_wind_speed < 10.8 ~ "Risky",
+          TRUE ~ "Safe"
+        )
+      )
+    forecast_results(forecast_results)
+    print("Safety labels assigned.")
+    print(head(forecast_results()))
+    
   })
   
   # Use the forecasted results in your app outputs
   output$prediction_table <- renderTable({
     print("Rendering forecast table...")  # Debugging message
     forecast_results()
+  })
+  
+  output$safety_map <- renderPlot({
+    req(forecast_results())  # Ensure predictions are complete
+    
+    # Merge full Baltic Sea data with predictions
+    safety_map_data <- baltic_data |> 
+      select(longitude, latitude) |>  # Keep full Baltic Sea grid
+      distinct() |>  # Remove duplicate coordinates
+      left_join(
+        forecast_results() |> select(latitude, longitude, safety_label),
+        by = c("latitude", "longitude")
+      ) |> 
+      mutate(
+        safety_label = factor(
+          safety_label,
+          levels = c("Safe", "Risky", "Unsafe")
+        )
+      )
+    
+    # Create the hexbin map
+    ggplot(safety_map_data, aes(x = longitude, y = latitude)) +
+      geom_hex(
+        aes(fill = safety_label), bins = 22
+      ) +
+      scale_fill_paletteer_d(
+        "ggsci::light_blue_material",
+        name = "Safety Label",
+        na.value = "gray"  # Gray for undefined regions
+      ) +
+      coord_quickmap() +  # Keep real-world aspect ratio
+      expand_limits(
+        x = range(baltic_data$longitude, na.rm = TRUE),
+        y = range(baltic_data$latitude, na.rm = TRUE)
+      ) +
+      labs(
+        x = "Longitude",
+        y = "Latitude",
+        title = "Safety Labels Across the Baltic Sea"
+      ) +
+      theme_minimal() +
+      theme(
+        legend.title = element_text(size = 14),  # Larger legend title
+        legend.text = element_text(size = 12),   # Larger legend text
+        legend.key.size = unit(1.2, "cm")        # Larger legend keys
+      )
   })
   
   # Reactive storage for points

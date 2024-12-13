@@ -129,7 +129,7 @@ waves_data <- waves_data |>
 )
 
 #Another dataset
-nc_data_other <- tidync("data_stream-oper.nc")
+nc_data_other <- tidync("../data_stream-oper.nc")
 
 other_data <- nc_data_other |>
   hyper_filter() |>
@@ -139,16 +139,72 @@ other_data <- nc_data_other |>
          siconc, tcwv, longitude, latitude, valid_time) |>
   mutate(valid_time = as.POSIXct(valid_time, origin = "1970-01-01", tz = "UTC"))
 
+# Setting the level of detail. Either to 0.5 degrees or leave it as 0.25 degrees
 other_data_adjusted <- other_data |>
   mutate(
     longitude = as.numeric(longitude),
     latitude = as.numeric(latitude),
-    longitude = round(longitude * 2) / 2,
-    latitude = round(latitude * 2) / 2
+    longitude = round(longitude, 2),
+    latitude = round(latitude, 2 )
 )
 
 other_data_cleaned <- other_data_adjusted |>
   distinct(longitude, latitude, valid_time, .keep_all = TRUE)
+
+baltic_atmospheric_data <- other_data_cleaned |>
+  rename(
+    u10_wind_component = u10,
+    v10_wind_component = v10,
+    mean_sea_level_pressure = msl,
+    sea_surface_temperature = sst,
+    surface_pressure = sp,
+    total_precipitation = tp,
+    u10_neutral_wind_component = u10n,
+    v10_neutral_wind_component = v10n,
+    max_wind_gust = fg10,
+    instantaneous_wind_gust = i10fg,
+    mean_snowfall_rate = msr,
+    mean_total_precipitation_rate = mtpr,
+    cloud_base_height = cbh,
+    low_cloud_cover = lcc,
+    total_cloud_cover = tcc,
+    total_column_cloud_ice_water = tciw,
+    total_column_cloud_liquid_water = tclw,
+    convective_precipitation = cp,
+    convective_rain_rate = crr,
+    large_scale_rain_rate = lsrr,
+    large_scale_precipitation = lsp,
+    precipitation_type = ptype,
+    total_column_rain_water = tcrw,
+    snowfall = sf,
+    convective_available_potential_energy = cape,
+    sea_ice_concentration = siconc,
+    total_column_water_vapour = tcwv,
+    time = valid_time
+  )
+
+baltic_atmospheric_data <- baltic_atmospheric_data |>
+  select(-c(total_column_cloud_liquid_water, total_column_cloud_ice_water,
+            total_column_rain_water, total_precipitation, convective_precipitation,
+            large_scale_precipitation, mean_snowfall_rate,
+            mean_total_precipitation_rate, convective_rain_rate,
+            large_scale_rain_rate, snowfall,
+            u10_neutral_wind_component, v10_neutral_wind_component,
+            cloud_base_height, total_column_water_vapour))
+
+
+# Add wind speed to baltic_atmospheric_data
+baltic_atmospheric_data <- baltic_atmospheric_data |>
+  mutate(
+    wind_speed = sqrt(u10_wind_component^2 + v10_wind_component^2),
+    .before = 1
+  )
+
+write_rds(baltic_atmospheric_data, "baltic_atmospheric_data.rds")
+
+# Since wind speed is calculated u10 and v10 wind components are not needed
+baltic_atmospheric_data <- baltic_atmospheric_data |>
+  select(-c(u10_wind_component, v10_wind_component))
 
 joined_data <- waves_data |>
   left_join(other_data_cleaned, by = c("longitude", "latitude", "valid_time"))
@@ -929,7 +985,7 @@ write_rds(baltic_data_model, "baltic_data_model.rds")
 
 baltic_data_labeled <- read_rds("baltic_data_labeled.rds")
 
-baltic_data <- read_rds("baltic_data.rds")
+baltic_data <- read_rds("../baltic_data.rds")
 
 baltic_data_normalized <- read_rds("baltic_data_normalized.rds")
 
