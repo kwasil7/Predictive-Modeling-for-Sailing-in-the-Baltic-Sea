@@ -77,39 +77,66 @@ ui <- navbarPage(
     )
   ),
   
-  # Tab 3: only atmospheric data 0.25 degrees
+  # Tab 3: Atmospheric Data 0.25 Degrees (Refined)
   tabPanel(
-    "Atmospheric Data 0.25 Degrees",
+    "Atmospheric Data (0.25° Resolution)",
     sidebarLayout(
       sidebarPanel(
-        radioButtons("point_type", "Point to select:",
-                     choices = c("Start", "Via", "End"),
-                     inline = TRUE),
-        actionButton("atmos_add_point", "Add Point"),
-        actionButton("atmos_clear_route", "Clear Route"),
-        actionButton("atmos_plot_route", "Plot Route"),
-        actionButton("atmos_save_points", "Save Selected Points as Tibble"),
+        h3("Route Selection"),
+        radioButtons(
+          "point_type", 
+          "Point Type:",
+          choices = c("Start", "Via", "End"),
+          inline = TRUE
+        ),
+        actionButton("atmos_add_point", "Add Point", icon = icon("map-marker-alt")),
+        actionButton("atmos_clear_route", "Clear Route", icon = icon("trash-alt")),
+        actionButton("atmos_plot_route", "Plot Route", icon = icon("route")),
+        actionButton("atmos_save_points", "Save Route Points", icon = icon("save")),
+        
+        hr(),
+        
+        h3("Prediction Settings"),
         selectInput(
-          "atmos_variable_group", "Select variables to predict:",
+          "atmos_variable_group", 
+          "Variables to Predict:",
           choices = list(
-            "Basic variables (safety-related)" = "basic",
-            "All atmospheric variables" = "all_atmos"
+            "Basic Variables (Safety-Related)" = "basic",
+            "All Atmospheric Variables" = "all_atmos"
           ),
           selected = "basic"
         ),
         dateInput(
-          "selected_date", "Select Date:",
-          value = "2013-01-08",  # Default to an example date
+          "selected_date", 
+          "Select Date for Visualization:",
+          value = "2013-01-08",  # Default date
           min = "2013-01-01",
           max = "2013-01-31"
         ),
-        actionButton("atmos_predict", "Predict Variables")
+        actionButton("atmos_predict", "Run Prediction", icon = icon("chart-line")),
+        
+        hr(),
+        
+        h3("Messages"),
+        verbatimTextOutput("atmos_saved_message")
       ),
       mainPanel(
+        h3("Route Map"),
         leafletOutput("atmos_route_map", height = "600px"),
+        
+        hr(),
+        
+        h3("Route Points Table"),
         tableOutput("atmos_route_table"),
-        verbatimTextOutput("atmos_saved_message"),
+        
+        hr(),
+        
+        h3("Safety Map"),
         plotOutput("atmos_safety_map", height = "800px", width = "1200px"),
+        
+        hr(),
+        
+        h3("Prediction Results"),
         tableOutput("atmos_prediction_table")
       )
     )
