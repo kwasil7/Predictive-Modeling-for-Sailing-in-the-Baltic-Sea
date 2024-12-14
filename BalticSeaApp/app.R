@@ -12,6 +12,7 @@ library(tidyverse)
 
 # Load the dataset during app initialization
 baltic_data <- read_rds("baltic_data_for_shiny/baltic_data_model.rds")
+baltic_atmospheric_data <- read_rds("baltic_data_for_shiny/baltic_atmospheric_data.rds")
 
 # Glimpse the dataset in the console to confirm it's loaded
 print(glimpse(baltic_data))
@@ -81,6 +82,13 @@ ui <- navbarPage(
     "Atmospheric Data 0.25 Degrees",
     sidebarLayout(
       sidebarPanel(
+        radioButtons("point_type", "Point to select:",
+                     choices = c("Start", "Via", "End"),
+                     inline = TRUE),
+        actionButton("atmos_add_point", "Add Point"),
+        actionButton("atmos_clear_route", "Clear Route"),
+        actionButton("atmos_plot_route", "Plot Route"),
+        actionButton("atmos_save_points", "Save Selected Points as Tibble"),
         selectInput(
           "atmos_variable_group", "Select variables to predict:",
           choices = list(
@@ -89,9 +97,18 @@ ui <- navbarPage(
           ),
           selected = "basic"
         ),
+        dateInput(
+          "selected_date", "Select Date:",
+          value = "2013-01-08",  # Default to an example date
+          min = "2013-01-01",
+          max = "2013-01-31"
+        ),
         actionButton("atmos_predict", "Predict Variables")
       ),
       mainPanel(
+        leafletOutput("atmos_route_map", height = "600px"),
+        tableOutput("atmos_route_table"),
+        verbatimTextOutput("atmos_saved_message"),
         plotOutput("atmos_safety_map", height = "800px", width = "1200px"),
         tableOutput("atmos_prediction_table")
       )
@@ -436,6 +453,286 @@ server <- function(input, output, session) {
         axis.title.y = element_text(size = 12)
       )
   })
+  
+  # Atmospheric tab map
+  # Define a new reactiveValues for atmospheric points
+  atmos_points <- reactiveValues(
+    data = tibble(type = character(), longitude = numeric(), latitude = numeric()),
+    route = NULL
+  )
+  
+  # Observe map clicks and add points dynamically for atmospheric tab
+  observeEvent(input$atmos_route_map_click, {
+    click <- input$atmos_route_map_click
+    if (!is.null(click)) {
+      new_point <- tibble(
+        type = input$point_type,
+        longitude = click$lng,
+        latitude = click$lat
+      )
+      atmos_points$data <- bind_rows(atmos_points$data, new_point)
+      
+      # Update map with markers for the selected point
+      leafletProxy("atmos_route_map") |>
+        addCircleMarkers(
+          lng = click$lng,
+          lat = click$lat,
+          color = ifelse(input$point_type == "Start", "green",
+                         ifelse(input$point_type == "End", "red", "orange")),
+          label = paste(input$point_type, "(", round(click$lng, 2), ",", round(click$lat, 2), ")")
+        )
+    }
+  })
+  
+  # Clear all points for atmospheric tab
+  observeEvent(input$atmos_clear_route, {
+    atmos_points$data <- tibble(type = character(), longitude = numeric(), latitude = numeric())
+    leafletProxy("atmos_route_map") |> clearMarkers() |> clearShapes()
+    output$atmos_saved_message <- renderText("Route cleared.")
+  })
+  
+  # Plot the route for atmospheric tab
+  observeEvent(input$atmos_plot_route, {
+    if (nrow(atmos_points$data) < 2) {
+      output$atmos_saved_message <- renderText("At least a Start and End point are required.")
+      return(NULL)
+    }
+    
+    # Sort points: Start -> Via -> End
+    sorted_points <- atmos_points$data |>
+      arrange(match(type, c("Start", "Via", "End")))
+    
+    # Generate the route
+    route <- bind_rows(lapply(1:(nrow(sorted_points) - 1), function(i) {
+      gcIntermediate(
+        c(sorted_points$longitude[i], sorted_points$latitude[i]),
+        c(sorted_points$longitude[i + 1], sorted_points$latitude[i + 1]),
+        n = 20,
+        addStartEnd = TRUE,
+        sp = TRUE
+      ) |>
+        coordinates() |>
+        as.data.frame() |>
+        setNames(c("longitude", "latitude"))
+    })) |>
+      mutate(
+        longitude = round(longitude * 4) / 4, # Round to nearest 0.25
+        latitude = round(latitude * 4) / 4
+      ) |>
+      distinct()
+    
+    # Store the route and update the map
+    atmos_points$route <- route
+    
+    leafletProxy("atmos_route_map") |>
+      clearShapes() |>
+      addPolylines(data = route, lng = ~longitude, lat = ~latitude, color = "blue")
+    
+    output$atmos_saved_message <- renderText("Route plotted.")
+  })
+  
+  # Save selected points as a tibble for atmospheric tab
+  observeEvent(input$atmos_save_points, {
+    if (nrow(atmos_points$data) > 0) {
+      atmos_points$saved_points <- atmos_points$data |> as_tibble()
+      output$atmos_saved_message <- renderText("Selected points have been saved as a tibble.")
+    } else {
+      output$atmos_saved_message <- renderText("No points to save.")
+    }
+  })
+  
+  # Display the route as a table in atmospheric tab
+  output$atmos_route_table <- renderTable({
+    atmos_points$route
+  })
+  
+  # Initial map rendering for atmospheric tab
+  output$atmos_route_map <- renderLeaflet({
+    leaflet() |> addTiles() |> setView(lng = 18.5, lat = 55.5, zoom = 6)
+  })
+  
+  # Prediction logic for atmospheric variables
+  # Reactive storage for atmospheric forecast results
+  atmos_forecast_results <- reactiveVal(NULL)
+  
+  # Observe "Predict Variables" button click for atmospheric tab
+  observeEvent(input$atmos_predict, {
+    # Ensure a group is selected
+    req(atmos_selected_variables())
+    req(atmos_points$route)  # Ensure route exists
+    print("Using selected route for atmospheric predictions...")
+    print("Starting atmospheric predictions...")  # Debugging message
+    
+    # Get the selected variables
+    selected_vars <- atmos_selected_variables()
+    
+    # Filter data to only include 2012 and route coordinates
+    training_data <- baltic_atmospheric_data |>
+      filter(
+        latitude %in% atmos_points$route$latitude,
+        longitude %in% atmos_points$route$longitude,
+        year(time) == 2012
+      )
+    print("Atmospheric training data filtered.")
+    
+    # Group by latitude and longitude
+    grouped_data <- training_data |>
+      group_by(latitude, longitude) |>
+      group_split()
+    
+    # Define forecast parameters
+    window_size <- 3
+    future_length <- 31 * 3  # 31 days * 3 obs/day
+    future_dates <- seq.Date(
+      from = as.Date("2013-01-01"),
+      to = as.Date("2013-01-31"),
+      by = "day"
+    )
+    future_times <- as.POSIXct(
+      paste(
+        rep(future_dates, each = 3),
+        rep(c("06:00:00", "12:00:00", "18:00:00"), times = length(future_dates))
+      ),
+      tz = "UTC"
+    )
+    
+    # Initialize list to store results
+    results <- vector("list", length(grouped_data))
+    
+    # Loop through each location
+    for (i in seq_along(grouped_data)) { 
+      loc_data <- grouped_data[[i]] |>
+        arrange(time)
+      
+      # Store forecast results for each selected variable
+      forecast_list <- vector("list", length(selected_vars))
+      
+      for (v in seq_along(selected_vars)) {
+        var_name <- selected_vars[v]
+        
+        # Extract and interpolate time series for the current variable
+        ts_data <- loc_data |>
+          pull(var_name)
+        
+        # Interpolate missing values
+        ts_data <- na.approx(ts_data, rule = 2)
+        
+        # Generate forecasts using WMA
+        wma_forecasts <- numeric(future_length)
+        for (j in seq_along(wma_forecasts)) {
+          recent_values <- c(ts_data, wma_forecasts[1:(j - 1)])
+          recent_values <- na.approx(recent_values, rule = 2)
+          
+          if (length(recent_values) < window_size) {
+            wma_forecasts[j] <- NA
+          } else {
+            wma_result <- WMA(recent_values, n = window_size)
+            wma_forecasts[j] <- tail(wma_result, 1)
+          }
+        }
+        
+        forecast_list[[v]] <- tibble(!!paste0("predicted_", var_name) := wma_forecasts)
+      }
+      
+      # Combine all predictions for this location into one tibble
+      loc_results <- bind_cols(
+        tibble(
+          latitude = unique(loc_data$latitude),
+          longitude = unique(loc_data$longitude),
+          time = future_times
+        ),
+        bind_cols(forecast_list)
+      )
+      
+      results[[i]] <- loc_results
+    }
+    
+    # Combine all results into a single data frame and update reactiveVal
+    atmos_forecast_results(bind_rows(results))
+    print("Atmospheric predictions complete.")
+    print("Updated atmos_forecast_results:")
+    print(head(atmos_forecast_results()))
+  })
+  
+  # Add safety labels to atmospheric forecast results
+  observeEvent(input$atmos_predict, {
+    # Ensure atmospheric forecast results exist
+    req(atmos_forecast_results())
+    
+    # Add safety labels to the forecast results
+    updated_results <- atmos_forecast_results() |> 
+      mutate(
+        safety_label = case_when(
+          predicted_wind_speed >= 10.8 ~ "Unsafe",
+          predicted_sea_ice_concentration > 0.3 ~ "Risky",
+          predicted_wind_speed >= 8.0 & predicted_wind_speed < 10.8 ~ "Risky",
+          TRUE ~ "Safe"
+        )
+      )
+    
+    # Update the reactiveVal with safety labels
+    atmos_forecast_results(updated_results)
+    print("Safety labels assigned for atmospheric data.")
+    print(head(atmos_forecast_results()))
+  })
+  
+  # Atmospheric safety map with refined hex bins
+  output$atmos_safety_map <- renderPlot({
+    req(atmos_forecast_results())  # Ensure predictions are complete
+    req(input$selected_date)  # Ensure a date is selected
+    
+    # Get the world map and filter for the Baltic Sea region
+    baltic_map <- map_data("world") |>
+      filter(lat > 53, lat < 66, long > 9, long < 31)
+    
+    # Filter safety data for the selected date and join with route points
+    safety_map_data <- atmos_forecast_results() |> 
+      filter(as.Date(time) == as.Date(input$selected_date)) |>  # Filter by selected date
+      semi_join(atmos_points$route, by = c("longitude", "latitude")) |>  # Only use route points
+      mutate(
+        safety_label = factor(
+          safety_label,
+          levels = c("Safe", "Risky", "Unsafe")
+        )
+      )
+    
+    # Create the map with safety labels
+    ggplot() +
+      # Add Baltic Sea map as background
+      geom_polygon(data = baltic_map, aes(x = long, y = lat, group = group),
+                   fill = "gray80", color = "black") +
+      # Add hexbin safety data
+      geom_hex(
+        data = safety_map_data,
+        aes(x = longitude, y = latitude, fill = safety_label),
+        bins = 40  # Adjust bin size for finer granularity
+      ) +
+      scale_fill_paletteer_d(
+        "ggsci::light_blue_material",
+        name = "Safety Label",
+        na.value = "gray"  # Gray for undefined regions
+      ) +
+      coord_quickmap() +  # Keep real-world aspect ratio
+      labs(
+        x = "Longitude",
+        y = "Latitude",
+        title = paste("Safety Labels Along the Route (", input$selected_date, ")", sep = "")
+      ) +
+      theme_minimal() +
+      theme(
+        legend.title = element_text(size = 14),  # Larger legend title
+        legend.text = element_text(size = 12),   # Larger legend text
+        legend.key.size = unit(1.2, "cm")        # Larger legend keys
+      )
+  })
+  
+  
+  # Render atmospheric prediction table
+  output$atmos_prediction_table <- renderTable({
+    print("Rendering atmospheric forecast table...")  # Debugging message
+    atmos_forecast_results()
+  })
+  
 }
 
 # Run the App

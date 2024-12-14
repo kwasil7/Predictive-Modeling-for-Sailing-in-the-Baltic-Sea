@@ -200,7 +200,7 @@ baltic_atmospheric_data <- baltic_atmospheric_data |>
     .before = 1
   )
 
-write_rds(baltic_atmospheric_data, "baltic_atmospheric_data.rds")
+baltic_atmospheric_data <- read_rds("BalticSeaApp/baltic_data_for_shiny/baltic_atmospheric_data.rds")
 
 # Since wind speed is calculated u10 and v10 wind components are not needed
 baltic_atmospheric_data <- baltic_atmospheric_data |>
@@ -403,7 +403,7 @@ baltic_data_with_indexes <- baltic_data_with_indexes |>
   rename(k_index = kx, total_totals_index = totalx)
 
 # Save the data in RDS format
-baltic_data <- read_rds("baltic_data.rds")
+baltic_data <- read_rds("../baltic_data.rds")
 
 # Calculate wavelength (L)
 baltic_data_normalized <- baltic_data_normalized |>
@@ -920,6 +920,22 @@ baltic_data |>
   ) +
   theme_minimal()
 
+# Baltic atmospheric map
+baltic_atmospheric_data |>
+  ggplot(aes(x = longitude, y = latitude)) +
+  stat_summary_hex(
+    aes(z = convective_available_potential_energy),  # Variable to summarize
+    fun = mean,  # Summary statistic
+    bins = 40
+  ) +
+  scale_fill_paletteer_c("ggthemes::Blue-Teal", name = "Mean CAPE [J/kg]") +
+  coord_quickmap() +  # Real-world aspect ratio
+  labs(
+    x = "Longitude",
+    y = "Latitude",
+    title = "Mean Convective Available Potential Energy in the Baltic Sea"
+  ) +
+  theme_minimal()
 
 # Heatmap and frequency table ---------------------------------------------
 library(tidyquant)
