@@ -779,9 +779,9 @@ server <- function(input, output, session) {
         ) +
         theme_minimal() +
         theme(
-          legend.title = element_text(size = 14),  # Larger legend title
-          legend.text = element_text(size = 12),   # Larger legend text
-          legend.key.size = unit(1.2, "cm")        # Larger legend keys
+          legend.title = element_text(size = 12),  # Larger legend title
+          legend.text = element_text(size = 10),   # Larger legend text
+          legend.key.size = unit(1, "cm")        # Larger legend keys
         )
       
       # Wrap the ggplot object in a girafe interactive object
