@@ -107,6 +107,11 @@ ui <- navbarPage(
         
         hr(),
         
+        h3("Interactive Map"),
+        girafeOutput("atmos_interactive_map", height = "800px", width = "1200px"),
+        
+        hr(),
+        
         h3("Prediction Results"),
         DTOutput("atmos_prediction_table"),
         
@@ -751,7 +756,7 @@ server <- function(input, output, session) {
           aes(
             x = longitude, y = latitude, 
             fill = safety_label,
-            tooltip = paste0("Wind Speed: ", wind_speed, " knots\n",
+            tooltip = paste0("Wind Speed: ", predicted_wind_speed, " m/s\n",
                              "Beaufort: ", beaufort_category, "\n",
                              "Safety: ", safety_label),
             data_id = paste(longitude, latitude)
