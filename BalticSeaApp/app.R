@@ -114,7 +114,7 @@ ui <- navbarPage(
           "prediction_date_range", 
           "Select Prediction Date Range:",
           start = "2023-01-01",  # Default start date
-          end = "2023-12-31",    # Default end date
+          end = "2023-01-31",    # Default end date
           min = "2000-01-01",    # Minimum date allowed
           max = "2100-12-31"     # Maximum date allowed
         ),
@@ -133,6 +133,14 @@ ui <- navbarPage(
           "selected_date", 
           "Select Date for Visualization:",
           value = Sys.Date()  # Default visualization date
+        ),
+        selectInput(
+          "selected_time", 
+          "Select Time for Visualization (Optional):",
+          choices = c("All Day" = "all_day", "06:00 UTC" = "06:00:00", 
+                      "12:00 UTC" = "12:00:00", "18:00 UTC" = "18:00:00"),
+          selected = "all_day",  # Default to "All Day"
+          multiple = FALSE
         ),
         actionButton("change_visualization", "Visualize", icon = icon("sync")),
         
@@ -757,9 +765,18 @@ server <- function(input, output, session) {
       baltic_map <- map_data("world") |>
         filter(lat > 53, lat < 66, long > 9, long < 31)
       
-      # Filter safety data for the selected date and join with route points
+      # Filter safety data for the selected date
       safety_map_data <- atmos_forecast_results() |> 
-        filter(as.Date(time) == as.Date(input$selected_date)) |>  # Filter by selected date
+        filter(as.Date(time) == as.Date(input$selected_date))  # Filter by selected date
+      
+      # Apply time filtering if a specific time is selected
+      if (input$selected_time != "all_day") {
+        safety_map_data <- safety_map_data |>
+          filter(format(time, "%H:%M:%S") == input$selected_time)
+      }
+      
+      # Join with route points
+      safety_map_data <- safety_map_data |> 
         semi_join(atmos_points$route, by = c("longitude", "latitude")) |>  # Only use route points
         mutate(
           safety_label = factor(
@@ -788,7 +805,10 @@ server <- function(input, output, session) {
         labs(
           x = "Longitude",
           y = "Latitude",
-          title = paste("Safety Labels Along the Route (", input$selected_date, ")", sep = "")
+          title = paste("Safety Labels Along the Route (", 
+                        input$selected_date, 
+                        ifelse(input$selected_time != "all_day", paste("at", input$selected_time), ""), 
+                        ")", sep = "")
         ) +
         theme_minimal() +
         theme(
