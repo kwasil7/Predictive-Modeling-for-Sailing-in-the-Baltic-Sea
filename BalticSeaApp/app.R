@@ -457,25 +457,30 @@ server <- function(input, output, session) {
         # Initialize the forecast array
         forecasts <- numeric(future_length)
         
-        # Handle predictions using predicted values
         for (j in seq_along(forecasts)) {
           recent_values <- c(ts_data, forecasts[1:(j - 1)])
           recent_values <- na.approx(recent_values, rule = 2)
           
           if (length(recent_values) < window_size) {
             forecasts[j] <- NA
-          } else if (var_name %in% c("mean_sea_level_pressure", "sea_surface_temperature")) {
-            # Use EMA for variables with gradual trends
-            ema_result <- EMA(recent_values, n = 36, alpha = 0.2)  # Adjust n and alpha for week-to-week variability
+          } else if (var_name == "sea_surface_temperature") {
+            ema_result <- EMA(recent_values, n = 108, alpha = 0.1)  # Strong seasonal trends
             forecasts[j] <- tail(ema_result, 1)
-          } else if (var_name %in% c("low_cloud_cover", "total_cloud_cover", "precipitation_type")) {
-            # Use SMA for stable variables
-            sma_result <- SMA(recent_values, n = 9)  # 3-day smoothing to preserve variability
-            forecasts[j] <- tail(sma_result, 1)
+          } else if (var_name == "mean_sea_level_pressure") {
+            ema_result <- EMA(recent_values, n = 27, alpha = 0.2)  # Moderate trends
+            forecasts[j] <- tail(ema_result, 1)
+          } else if (var_name == "wave_height") {
+            ema_result <- EMA(recent_values, n = 27, alpha = 0.2)  # More seasonal variability
+            forecasts[j] <- tail(ema_result, 1)
+          } else if (var_name == "mean_wave_period") {
+            ema_result <- EMA(recent_values, n = 27, alpha = 0.2)  # Similar to wave height
+            forecasts[j] <- tail(ema_result, 1)
+          } else if (var_name == "wind_speed") {
+            ema_result <- EMA(recent_values, n = 6, alpha = 0.8)  # Less seasonal, more short-term
+            forecasts[j] <- tail(ema_result, 1)
           } else {
-            # Use EMA for other variables with moderate variability
-            ema_result <- EMA(recent_values, n = 3, alpha = 0.4)  # Shorter-term smoothing
-            forecasts[j] <- tail(ema_result, 1)
+            sma_result <- SMA(recent_values, n = 9)  # General smoothing
+            forecasts[j] <- tail(sma_result, 1)
           }
         }
         
@@ -779,20 +784,20 @@ server <- function(input, output, session) {
         ) +
         theme_minimal() +
         theme(
-          legend.title = element_text(size = 12),  # Larger legend title
-          legend.text = element_text(size = 10),   # Larger legend text
-          legend.key.size = unit(1, "cm")        # Larger legend keys
+          legend.title = element_text(size = 10),  # Larger legend title
+          legend.text = element_text(size = 8),   # Larger legend text
+          legend.key.size = unit(0.5, "cm")        # Larger legend keys
         )
       
       # Wrap the ggplot object in a girafe interactive object
       girafe(ggobj = p, options = list(
         opts_hover(css = "fill:orange;"),       # Change color on hover
         opts_hover_inv(css = "opacity:0.5;"),   # Lower opacity for non-hovered areas
-        opts_tooltip(css = "font-size: 12px;")  # Tooltip styling
+        opts_tooltip(css = "font-size: 14px;")  # Tooltip styling
       ))
     })
-  })  
-
+  })
+  
 # Route selection tab 0.5 degrees -----------------------------------------
   
   # Define variable groups for the Route Tab
