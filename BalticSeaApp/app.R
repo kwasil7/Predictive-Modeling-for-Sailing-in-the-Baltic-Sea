@@ -10,6 +10,7 @@ library(sp)
 library(tidyverse)
 library(shinyjs)
 library(DT)
+library(ggiraph)
 
 # Load the dataset during app initialization
 baltic_data <- read_rds("baltic_data_for_shiny/baltic_data_model.rds")
@@ -226,20 +227,63 @@ ui <- navbarPage(
     sidebarLayout(
       sidebarPanel(
         useShinyjs(),
+        h4("Explore Historical Data"),
+        helpText(
+          "This tab is intended for the results of exploratory data analysis (EDA) ",
+          "of the dataset provided by the Copernicus Climate Data Store: ",
+          a("ERA5 Reanalysis Single Levels", 
+            href = "https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels?tab=overview",
+            target = "_blank"),
+          ". Select variables and time ranges below to visualize historical trends."
+        ),
+        hr(),
         selectInput("plot_var", "Select Variable to Plot:",
                     choices = c("Wind speed" = "wind_speed",
+                                "Wind gust factor" = "wind_gust_factor",
                                 "Wave height" = "significant_height_combined_waves_swell",
                                 "Mean wave period" = "mean_wave_period",
+                                "Max individual wave height" = "max_individual_wave_height",
+                                "Peak wave period" = "peak_wave_period",
                                 "Sea surface temperature" = "sea_surface_temperature")),
         sliderInput("time_range", "Time Range:",
                     min = as.Date("2012-01-01"),
                     max = as.Date("2013-12-31"),
                     value = c(as.Date("2012-01-01"), as.Date("2013-12-31")),
-                    timeFormat = "%Y-%m-%d")
+                    timeFormat = "%Y-%m-%d"),
+        hr(),
+        checkboxInput("show_heatmap", "Show Interactive Heatmap", value = FALSE),
+        
+        # Conditional dropdowns for X and Y axis variables
+        conditionalPanel(
+          condition = "input.show_heatmap == true",
+          selectInput("heatmap_x", "Select X-axis Variable:",
+                      choices = c("Beaufort Category" = "beaufort_category",
+                                  "Douglas Category" = "douglas_category",
+                                  "Oktas Category" = "oktas_category",
+                                  "Season" = "season",
+                                  "Safety Label" = "safety_label",
+                                  "Precipitation Type" = "precipitation_type")),
+          selectInput("heatmap_y", "Select Y-axis Variable:",
+                      choices = c("Douglas Category" = "douglas_category",
+                                  "Beaufort Category" = "beaufort_category",
+                                  "Oktas Category" = "oktas_category",
+                                  "Season" = "season",
+                                  "Safety Label" = "safety_label",
+                                  "Precipitation Type" = "precipitation_type"))
+        )
       ),
       mainPanel(
+        h3("Variable Trends"),
         plotOutput("plot_output"),
-        verbatimTextOutput("plot_summary")
+        hr(),
+        h4("Summary Statistics"),
+        verbatimTextOutput("plot_summary"),
+        hr(),
+        conditionalPanel(
+          condition = "input.show_heatmap == true",
+          h4("Interactive Heatmap"),
+          plotOutput("heatmap_output", height = "600px", width = "800px")
+        )
       )
     )
   )
@@ -249,7 +293,6 @@ library(zoo)
 library(TTR)
 library(paletteer)
 library(forecast)
-library(ggiraph)
 
 # Use in a ggplot2 chart:
 scale_colour_paletteer_d("ggsci::light_blue_material")
@@ -1192,6 +1235,32 @@ server <- function(input, output, session) {
         axis.title.x = element_text(size = 12),
         axis.title.y = element_text(size = 12)
       )
+  })
+  
+  # Heatmap
+  observeEvent(input$show_heatmap, {
+    output$heatmap_output <- renderPlot({
+      req(baltic_data)  # Ensure the dataset is loaded
+      
+      # Dynamically count data based on selected variables
+      heatmap_data <- baltic_data |>
+        count(!!sym(input$heatmap_x), !!sym(input$heatmap_y), name = "count")
+      
+      # Create heatmap
+      ggplot(heatmap_data, aes(x = .data[[input$heatmap_x]], y = .data[[input$heatmap_y]])) +
+        geom_tile(aes(fill = count), color = "white") +
+        scale_fill_paletteer_c("ggthemes::Blue-Teal", name = "Count") +
+        labs(
+          x = input$heatmap_x,
+          y = input$heatmap_y,
+          title = paste("Heatmap of", input$heatmap_x, "and", input$heatmap_y)
+        ) +
+        theme_minimal() +
+        theme(
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          axis.text = element_text(size = 14)
+        )
+    })
   })
 }
 
