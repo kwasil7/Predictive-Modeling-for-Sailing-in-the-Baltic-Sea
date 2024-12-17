@@ -121,9 +121,9 @@ ui <- navbarPage(
         
         div(id = "additional_plots", style = "display: none;",
             h3("Atmospheric Variables Insights"),
-            plotOutput("wind_speed_plot", height = "400px"),
-            plotOutput("sea_level_pressure_plot", height = "400px"),
-            plotOutput("sea_surface_temperature_plot", height = "400px")
+            plotOutput("atmos_wind_speed_plot", height = "400px"),
+            plotOutput("atmos_sea_level_pressure_plot", height = "400px"),
+            plotOutput("atmos_sea_surface_temperature_plot", height = "400px")
         )
       )
     )
@@ -216,8 +216,22 @@ ui <- navbarPage(
         
         hr(),
         
+        h3("Interactive Map"),
+        girafeOutput("route_interactive_map", height = "800px", width = "1200px"),
+        
+        hr(),
+        
         h3("Prediction Results"),
-        DTOutput("route_prediction_table")
+        DTOutput("route_prediction_table"),
+        
+        hr(),
+        
+        div(id = "route_additional_plots", style = "display: none;",
+            h3("Variables Insights"),
+            plotOutput("route_wind_speed_plot", height = "400px"),
+            plotOutput("route_wave_height_plot", height = "400px"),
+            plotOutput("route_sea_ice_plot", height = "400px")
+        )
       )
     )
   ),
@@ -484,6 +498,9 @@ server <- function(input, output, session) {
       showNotification("Start date cannot be later than end date!", type = "error")
       return()
     }
+    
+    output$atmos_saved_message <- renderText("Prediction has started. Please wait for the results...")
+    
     req(atmos_selected_variables())
     req(atmos_points$route)
     req(atmos_points$route_saved)
@@ -557,20 +574,22 @@ server <- function(input, output, session) {
           if (length(recent_values) < window_size) {
             forecasts[j] <- NA
           } else if (var_name == "sea_surface_temperature") {
-            ema_result <- EMA(recent_values, n = 108, alpha = 0.1)  # Strong seasonal trends
+            ema_result <- EMA(recent_values, ratio = 0.05, wilder = TRUE)  # Strong seasonal trends
             forecasts[j] <- tail(ema_result, 1)
           } else if (var_name == "mean_sea_level_pressure") {
-            ema_result <- EMA(recent_values, n = 27, alpha = 0.2)  # Moderate trends
+            ema_result <- EMA(recent_values, ratio = 0.05, wilder = TRUE)  # Moderate trends
             forecasts[j] <- tail(ema_result, 1)
           } else if (var_name == "wave_height") {
-            ema_result <- EMA(recent_values, n = 27, alpha = 0.2)  # More seasonal variability
+            ema_result <- EMA(recent_values, ratio = 0.5)  # Seasonal variability
             forecasts[j] <- tail(ema_result, 1)
           } else if (var_name == "mean_wave_period") {
-            ema_result <- EMA(recent_values, n = 27, alpha = 0.2)  # Similar to wave height
+            ema_result <- EMA(recent_values, ratio = 0.5)  # Similar to wave height
             forecasts[j] <- tail(ema_result, 1)
           } else if (var_name == "wind_speed") {
-            ema_result <- EMA(recent_values, n = 6, alpha = 0.8)  # Less seasonal, more short-term
-            forecasts[j] <- tail(ema_result, 1)
+            ema_result <- EMA(recent_values, ratio = 0.7)  # Short-term variability
+            noise <- rnorm(1, mean = 0, sd = 0.1)          # Add Gaussian noise with small sd
+            # Add noise to EMA result and ensure the result is not below zero
+            forecasts[j] <- pmax(tail(ema_result, 1) + noise, 0)
           } else {
             sma_result <- SMA(recent_values, n = 9)  # General smoothing
             forecasts[j] <- tail(sma_result, 1)
@@ -726,7 +745,7 @@ server <- function(input, output, session) {
   })
   
   # Wind Speed Plot
-  output$wind_speed_plot <- renderPlot({
+  output$atmos_wind_speed_plot <- renderPlot({
     req(atmos_forecast_results())
     
     atmos_forecast_results() |>
@@ -742,7 +761,7 @@ server <- function(input, output, session) {
   })
   
   # Mean Sea Level Pressure Plot
-  output$sea_level_pressure_plot <- renderPlot({
+  output$atmos_sea_level_pressure_plot <- renderPlot({
     req(atmos_forecast_results())
     
     atmos_forecast_results() |>
@@ -759,7 +778,7 @@ server <- function(input, output, session) {
   })
   
   # Sea Surface Temperature Plot
-  output$sea_surface_temperature_plot <- renderPlot({
+  output$atmos_sea_surface_temperature_plot <- renderPlot({
     req(atmos_forecast_results())
     
     atmos_forecast_results() |>
@@ -874,7 +893,7 @@ server <- function(input, output, session) {
           y = "Latitude",
           title = paste("Interactive Safety Map (",
                         input$selected_date,
-                        ifelse(input$selected_time != "all_day", paste("at", input$selected_time), ""),
+                        ifelse(input$selected_time != "all_day", paste(" at", input$selected_time), ""),
                         ")")
         ) +
         theme_minimal() +
@@ -1034,6 +1053,7 @@ server <- function(input, output, session) {
   observeEvent(input$route_start_prediction, {
     req(route_selected_variables())
     req(route_points$route)
+    output$route_saved_message <- renderText("Prediction has started. Please wait for the results...")
     
     # Validate the prediction date range
     if (as.Date(input$route_prediction_date_range[1]) > as.Date(input$route_prediction_date_range[2])) {
@@ -1105,21 +1125,31 @@ server <- function(input, output, session) {
         # Handle predictions using predicted values iteratively
         for (j in seq_along(forecasts)) {
           recent_values <- c(ts_data, forecasts[1:(j - 1)])
-          recent_values <- na.approx(recent_values, rule = 2)
+          recent_values <- na.approx(recent_values, rule = 2)  # Handle missing values
           
           if (length(recent_values) < window_size) {
-            forecasts[j] <- NA
-          } else if (var_name %in% c("significant_height_combined_waves_swell")) {
-            # Use SMA for wave height stability
-            sma_result <- SMA(recent_values, n = 9)  # Smooth over 3-day periods
+            forecasts[j] <- NA  # Not enough data for prediction
+          } else if (var_name == "significant_height_combined_waves_swell") {
+            # SMA for wave height: stable with moderate smoothing
+            sma_result <- SMA(recent_values, n = 9)  # Smooth over ~3-day window
             forecasts[j] <- tail(sma_result, 1)
-          } else if (var_name %in% c("wind_speed", "sea_ice_concentration")) {
-            # Use EMA for responsive variables
-            ema_result <- EMA(recent_values, n = 18, alpha = 0.3)  # Moderate smoothing
+          } else if (var_name == "sea_surface_temperature") {
+            ema_result <- EMA(recent_values, ratio = 0.05, wilder = TRUE)  # Strong seasonal trends
+            forecasts[j] <- tail(ema_result, 1)
+          } else if (var_name == "mean_sea_level_pressure") {
+            ema_result <- EMA(recent_values, ratio = 0.05, wilder = TRUE)  # Moderate trends
+            forecasts[j] <- tail(ema_result, 1)
+          } else if (var_name == "wind_speed") {
+            # EMA for wind speed: responsive with moderate variability
+            ema_result <- EMA(recent_values, ratio = 0.7)
+            forecasts[j] <- tail(ema_result, 1)
+          } else if (var_name == "sea_ice_concentration") {
+            # EMA for sea ice: moderate smoothing for variability
+            ema_result <- EMA(recent_values, ratio = 0.1)
             forecasts[j] <- tail(ema_result, 1)
           } else {
-            # Default to EMA for other variables
-            ema_result <- EMA(recent_values, n = 36, alpha = 0.2)  # Long-term smoothing
+            # Default to EMA for general variables with longer-term trends
+            ema_result <- EMA(recent_values, ratio = 0.2)
             forecasts[j] <- tail(ema_result, 1)
           }
         }
@@ -1202,7 +1232,7 @@ server <- function(input, output, session) {
         geom_hex(
           data = safety_map_data,
           aes(x = longitude, y = latitude, fill = safety_label),
-          bins = 20
+          bins = 25
         ) +
         scale_fill_paletteer_d(
           "ggsci::light_blue_material",
@@ -1241,6 +1271,63 @@ server <- function(input, output, session) {
     )
   })
   
+  # Show/Hide Additional Plots Based on Prediction Variables
+  observe({
+    if (input$route_variable_group == "basic") {
+      shinyjs::show("route_additional_plots")
+    } else {
+      shinyjs::hide("route_additional_plots")
+    }
+  })
+  
+  # Wind Speed Plot
+  output$route_wind_speed_plot <- renderPlot({
+    req(route_forecast_results())
+    
+    route_forecast_results() |>
+      ggplot(aes(x = time, y = predicted_wind_speed)) +
+      geom_line(color = "blue") +
+      geom_smooth(se = FALSE, color = "red") +
+      labs(
+        x = "Time", 
+        y = "Wind speed [m/s]",
+        title = "Predicted wind speed over time"
+      ) +
+      theme_minimal()
+  })
+  
+  # Wave height plot
+  output$route_wave_height_plot <- renderPlot({
+    req(route_forecast_results())
+    
+    route_forecast_results() |>
+      ggplot(aes(x = time, y = predicted_significant_height_combined_waves_swell)) +
+      geom_line(color = "darkgreen") +
+      geom_smooth(se = FALSE, color = "orange") +
+      labs(
+        x = "Time",
+        y = "Wave height [m]",
+        title = "Predicted significant height of combined waves and swell over time"
+      ) +
+      theme_minimal()
+  })
+  
+  # Sea ice concentration plot
+  output$route_sea_ice_plot <- renderPlot({
+    req(route_forecast_results())
+    
+    route_forecast_results() |>
+      ggplot(aes(x = time, y = predicted_sea_ice_concentration)) +
+      geom_line(color = "blue") +
+      geom_smooth(se = FALSE, color = "aquamarine") +
+      labs(
+        x = "Time",
+        y = "Sea ice concentration [0; 1]",
+        title = "Predicted sea ice concentration over time"
+      ) +
+      theme_minimal()
+  })
+  
   # Clear all for the Route tab
   observeEvent(input$route_clear_all, {
     # Clear route data
@@ -1260,6 +1347,116 @@ server <- function(input, output, session) {
     shinyjs::reset("route_variable_group")
     
     showNotification("All inputs and predictions cleared.", type = "message")
+  })
+  
+
+# Route interactive map ---------------------------------------------------
+
+  # Observe "Create Interactive Plot" button click
+  observeEvent(input$route_change_visualization, {
+    output$route_interactive_map <- renderGirafe({
+      req(route_forecast_results())
+      req(input$route_selected_date)
+      
+      # Get the world map and filter for the Baltic Sea region
+      baltic_map <- map_data("world") |>
+        filter(lat > 53, lat < 66, long > 9, long < 31)
+      
+      # Filter safety data for the selected date
+      safety_map_data <- route_forecast_results() |> 
+        filter(as.Date(time) == as.Date(input$route_selected_date)) 
+      
+      # Apply time filtering if a specific time is selected
+      if (input$selected_time != "all_day") {
+        safety_map_data <- safety_map_data |>
+          filter(format(time, "%H:%M:%S") == input$route_selected_time)
+      }
+      
+      # Join with route points and categorize using Beaufort Scale
+      safety_map_data <- safety_map_data |> 
+        semi_join(route_points$route, by = c("longitude", "latitude")) |> 
+        mutate(
+          safety_label = factor(
+            safety_label, 
+            levels = c("Safe", "Risky", "Unsafe")
+          ),
+          # Beaufort Scale categories
+          beaufort_category = case_when(
+            predicted_wind_speed < 0.3 ~ "0 (Calm)",
+            predicted_wind_speed >= 0.3 & predicted_wind_speed < 1.5 ~ "1 (Light Air)",
+            predicted_wind_speed >= 1.5 & predicted_wind_speed < 3.3 ~ "2 (Light Breeze)",
+            predicted_wind_speed >= 3.3 & predicted_wind_speed < 5.5 ~ "3 (Gentle Breeze)",
+            predicted_wind_speed >= 5.5 & predicted_wind_speed < 8.0 ~ "4 (Moderate Breeze)",
+            predicted_wind_speed >= 8.0 & predicted_wind_speed < 10.8 ~ "5 (Fresh Breeze)",
+            predicted_wind_speed >= 10.8 & predicted_wind_speed < 13.9 ~ "6 (Strong Breeze)",
+            predicted_wind_speed >= 13.9 & predicted_wind_speed < 17.2 ~ "7 (Near Gale)",
+            predicted_wind_speed >= 17.2 & predicted_wind_speed < 20.7 ~ "8 (Fresh Gale)",
+            predicted_wind_speed >= 20.7 & predicted_wind_speed < 24.5 ~ "9 (Strong Gale)",
+            predicted_wind_speed >= 24.5 & predicted_wind_speed < 28.4 ~ "10 (Storm)",
+            predicted_wind_speed >= 28.4 & predicted_wind_speed < 32.6 ~ "11 (Violent Storm)",
+            predicted_wind_speed >= 32.6 ~ "12 (Hurricane)"
+          ),
+          douglas_category = case_when(
+            predicted_significant_height_combined_waves_swell == 0 ~ "0 Calm (glassy)",
+            predicted_significant_height_combined_waves_swell > 0 & predicted_significant_height_combined_waves_swell <= 0.1 ~ "1 Calm (rippled)",
+            predicted_significant_height_combined_waves_swell > 0.1 & predicted_significant_height_combined_waves_swell <= 0.5 ~ "2 Smooth (wavelets)",
+            predicted_significant_height_combined_waves_swell > 0.5 & predicted_significant_height_combined_waves_swell <= 1.25 ~ "3 Slight",
+            predicted_significant_height_combined_waves_swell > 1.25 & predicted_significant_height_combined_waves_swell <= 2.5 ~ "4 Moderate",
+            predicted_significant_height_combined_waves_swell > 2.5 & predicted_significant_height_combined_waves_swell <= 4 ~ "5 Rough",
+            predicted_significant_height_combined_waves_swell > 4 & predicted_significant_height_combined_waves_swell <= 6 ~ "6 Very rough",
+            predicted_significant_height_combined_waves_swell > 6 & predicted_significant_height_combined_waves_swell <= 9 ~ "7 High",
+            predicted_significant_height_combined_waves_swell > 9 & predicted_significant_height_combined_waves_swell <= 14 ~ "8 Very high",
+            predicted_significant_height_combined_waves_swell > 14 ~ "9 Phenomenal"
+          )
+        )
+      
+      # Create interactive map
+      p <- ggplot() +
+        # Add Baltic Sea map as background
+        geom_polygon(data = baltic_map, aes(x = long, y = lat, group = group),
+                     fill = "gray80", color = "black") +
+        # Add interactive hexbin safety data
+        geom_hex_interactive(
+          data = safety_map_data,
+          aes(
+            x = longitude, y = latitude, 
+            fill = safety_label,
+            tooltip = paste0("Wind Speed: ", predicted_wind_speed, " m/s\n",
+                             "Beaufort: ", beaufort_category, "\n",
+                             "Douglas: ", douglas_category, "\n",
+                             "Safety: ", safety_label),
+            data_id = paste(longitude, latitude)
+          ),
+          bins = 25  # Adjust bin size for granularity
+        ) +
+        scale_fill_paletteer_d(
+          "ggsci::light_blue_material",
+          name = "Safety Label",
+          na.value = "gray"  # Gray for undefined regions
+        ) +
+        coord_quickmap() +  # Keep real-world aspect ratio
+        labs(
+          x = "Longitude",
+          y = "Latitude",
+          title = paste("Interactive Safety Map (",
+                        input$route_selected_date,
+                        ifelse(input$route_selected_time != "all_day", paste(" at", input$route_selected_time), ""),
+                        ")")
+        ) +
+        theme_minimal() +
+        theme(
+          legend.title = element_text(size = 10),  # Larger legend title
+          legend.text = element_text(size = 8),   # Larger legend text
+          legend.key.size = unit(0.5, "cm")        # Larger legend keys
+        )
+      
+      # Wrap the ggplot object in a girafe interactive object
+      girafe(ggobj = p, options = list(
+        opts_hover(css = "fill:orange;"),       # Change color on hover
+        opts_hover_inv(css = "opacity:0.5;"),   # Lower opacity for non-hovered areas
+        opts_tooltip(css = "font-size: 14px;")  # Tooltip styling
+      ))
+    })
   })
 
 # Plot tab ----------------------------------------------------------------
