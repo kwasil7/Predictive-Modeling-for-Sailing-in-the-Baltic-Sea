@@ -283,6 +283,17 @@ ui <- navbarPage(
           condition = "input.show_heatmap == true",
           h4("Interactive Heatmap"),
           plotOutput("heatmap_output", height = "600px", width = "800px")
+        ),
+        hr(),
+        h4("Saved Historical Plots"),
+        p("Below are the pre-generated plots from the historical analysis:"),
+        fluidRow(
+          column(6, img(src = "2_plots_max_wave_height_and_others.png", height = "300px", width = "100%")),
+          column(6, img(src = "air_density_vs_sea_surface_temp.png", height = "300px", width = "100%"))
+        ),
+        fluidRow(
+          column(6, img(src = "mean_wave_period_by_douglas.png", height = "300px", width = "100%")),
+          column(6, img(src = "sea_surface_temp_by_precipitation_type.png", height = "300px", width = "100%"))
         )
       )
     )
