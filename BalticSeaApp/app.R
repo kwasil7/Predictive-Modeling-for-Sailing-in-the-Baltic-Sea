@@ -66,8 +66,9 @@ ui <- navbarPage(
         
         # Info text about saving the route
         div(
-          style = "margin-top: 15px; color: red; font-weight: bold;",
-          "Note: Please save the route first before running predictions."
+          id = "atmos_prediction_warning",
+          style = "color: red; font-weight: bold;",
+          "Please save the route before running predictions."
         ),
         
         hr(),
@@ -287,13 +288,51 @@ ui <- navbarPage(
         hr(),
         h4("Saved Historical Plots"),
         p("Below are the pre-generated plots from the historical analysis:"),
+        
+        # Adjust the layout for centering and enlarging images
         fluidRow(
-          column(6, img(src = "2_plots_max_wave_height_and_others.png", height = "300px", width = "100%")),
-          column(6, img(src = "air_density_vs_sea_surface_temp.png", height = "300px", width = "100%"))
+          column(8, offset = 2,  # Center column (offset = 2 moves it to the center)
+                 img(src = "2_plots_max_wave_height_and_others.png", height = "400px", width = "100%"))
         ),
         fluidRow(
-          column(6, img(src = "mean_wave_period_by_douglas.png", height = "300px", width = "100%")),
-          column(6, img(src = "sea_surface_temp_by_precipitation_type.png", height = "300px", width = "100%"))
+          column(8, offset = 2,
+                 img(src = "air_density_vs_sea_surface_temp.png", height = "400px", width = "100%"))
+        ),
+        fluidRow(
+          column(8, offset = 2,
+                 img(src = "mean_wave_period_by_douglas.png", height = "400px", width = "100%"))
+        ),
+        fluidRow(
+          column(8, offset = 2,
+                 img(src = "sea_surface_temp_by_precipitation_type.png", height = "400px", width = "100%"))
+        ),
+        fluidRow(
+          column(8, offset = 2,
+                 img(src = "sea_surface_temperature_over_time.png", height = "400px", width = "100%"))
+        ),
+        fluidRow(
+          column(8, offset = 2,
+                 img(src = "surface_pressure_and_wind_gust_by_beaufort.png", height = "400px", width = "100%"))
+        ),
+        fluidRow(
+          column(8, offset = 2,
+                 img(src = "time_max_wave_height.png", height = "400px", width = "100%"))
+        ),
+        fluidRow(
+          column(8, offset = 2,
+                 img(src = "wave_height_over_time.png", height = "400px", width = "100%"))
+        ),
+        fluidRow(
+          column(8, offset = 2,
+                 img(src = "wavelength_to_wind_speed.png", height = "400px", width = "100%"))
+        ),
+        fluidRow(
+          column(8, offset = 2,
+                 img(src = "wind_speed_to_max_wave_height_by_oktas.png", height = "400px", width = "100%"))
+        ),
+        fluidRow(
+          column(8, offset = 2,
+                 img(src = "windrose.png", height = "400px", width = "100%"))
         )
       )
     )
@@ -588,8 +627,10 @@ server <- function(input, output, session) {
   observe({
     if (isTRUE(atmos_points$route_saved)) {
       shinyjs::enable("atmos_predict")
+      shinyjs::hide("atmos_prediction_warning")
     } else {
       shinyjs::disable("atmos_predict")
+      shinyjs::show("atmos_prediction_warning")
     }
   })
   
