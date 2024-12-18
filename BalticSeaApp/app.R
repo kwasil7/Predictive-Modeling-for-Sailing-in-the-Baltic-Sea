@@ -662,7 +662,7 @@ server <- function(input, output, session) {
         if (var_name %in% c("low_cloud_cover", "total_cloud_cover")) {
           # Use EMA for cloud variables
           future_forecast <- tryCatch({
-            ema_forecast <- EMA(ts_data, ratio = 0.1, wilder = TRUE)  # Adjust ratio as needed
+            ema_forecast <- EMA(ts_data, ratio = 0.2, wilder = TRUE)  # Adjust ratio as needed
             rep(tail(ema_forecast, 1), future_length)  # Repeat the last EMA value for the forecast length
           }, error = function(e) {
             message(sprintf("EMA failed for %s: %s", var_name, e$message))
@@ -1281,20 +1281,48 @@ server <- function(input, output, session) {
         if (var_name %in% c("low_cloud_cover", "total_cloud_cover")) {
           # Use EMA for cloud variables
           future_forecast <- tryCatch({
-            ema_forecast <- EMA(ts_data, ratio = 0.01, wilder = TRUE)  # Adjust ratio as needed
+            ema_forecast <- EMA(ts_data, ratio = 0.2, wilder = TRUE)  # Adjust ratio as needed
             rep(tail(ema_forecast, 1), future_length)  # Repeat the last EMA value for the forecast length
           }, error = function(e) {
             message(sprintf("EMA failed for %s: %s", var_name, e$message))
             rep(NA, future_length)
           })
         } else {
-          # Use Holt-Winters for other variables
+          # Create time series object for Holt-Winters
+          ts_obj <- tryCatch({
+            ts(ts_data, frequency = 1095)  # Adjust frequency for yearly seasonality
+          }, error = function(e) {
+            message(sprintf("Failed to create time series for %s: %s", var_name, e$message))
+            NULL
+          })
+          
+          if (is.null(ts_obj)) {
+            # If time series creation fails, return NA forecasts
+            forecast_list[[v]] <- tibble(!!paste0("predicted_", var_name) := rep(NA, future_length))
+            next
+          }
+          
+          # Fit Holt-Winters model
+          hw_model <- tryCatch({
+            HoltWinters(ts_obj)
+          }, error = function(e) {
+            # Handle model fitting errors gracefully
+            message(sprintf("Holt-Winters failed for %s: %s", var_name, e$message))
+            NULL
+          })
+          
+          if (is.null(hw_model)) {
+            # If model fitting fails, return NA forecasts
+            forecast_list[[v]] <- tibble(!!paste0("predicted_", var_name) := rep(NA, future_length))
+            next
+          }
+          
+          # Generate forecasts for the specified future length
           future_forecast <- tryCatch({
-            ts_obj <- ts(ts_data, frequency = 1095)  # Adjust frequency for yearly seasonality
-            hw_model <- HoltWinters(ts_obj)
             predict(hw_model, n.ahead = future_length)
           }, error = function(e) {
-            message(sprintf("Holt-Winters failed for %s: %s", var_name, e$message))
+            # Handle prediction errors gracefully
+            message(sprintf("Forecasting failed for %s: %s", var_name, e$message))
             rep(NA, future_length)
           })
         }
