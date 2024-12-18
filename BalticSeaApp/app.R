@@ -301,9 +301,9 @@ ui <- navbarPage(
         
         hr(),
         
-        h3("Interactive Plot for All Variables"),
         conditionalPanel(
-          condition = "input.route_show_interactive_plot == true",
+          condition = "input.route_variable_group == 'extended' && input.route_show_interactive_plot == true",
+          h3("Interactive Plot for All Variables"),
           plotOutput("route_interactive_plot", height = "600px", width = "800px")
         ),
         
@@ -646,60 +646,60 @@ server <- function(input, output, session) {
       forecast_list <- vector("list", length(selected_vars))
       
       for (v in seq_along(selected_vars)) {
-  var_name <- selected_vars[v]
-  
-  # Extract and interpolate time series for the current variable
-  ts_data <- loc_data |> 
-    pull(var_name) |> 
-    na.approx(rule = 2)  # Interpolate missing values
-  
-  if (length(ts_data) < 2) {
-    # Not enough data to fit a time series model
-    forecast_list[[v]] <- tibble(!!paste0("predicted_", var_name) := rep(NA, future_length))
-    next
-  }
-  
-  if (var_name %in% c("low_cloud_cover", "total_cloud_cover")) {
-    # Use EMA for cloud variables
-    future_forecast <- tryCatch({
-      ema_forecast <- EMA(ts_data, ratio = 0.01, wilder = TRUE)  # Adjust ratio as needed
-      rep(tail(ema_forecast, 1), future_length)  # Repeat the last EMA value for the forecast length
-    }, error = function(e) {
-      message(sprintf("EMA failed for %s: %s", var_name, e$message))
-      rep(NA, future_length)
-    })
-  } else {
-    # Create time series object for Holt-Winters
-    ts_obj <- ts(ts_data, frequency = 1095)  # Adjust frequency for yearly seasonality
-    
-    # Fit Holt-Winters model
-    hw_model <- tryCatch({
-      HoltWinters(ts_obj)
-    }, error = function(e) {
-      # Handle model fitting errors gracefully
-      message(sprintf("Holt-Winters failed for %s: %s", var_name, e$message))
-      NULL
-    })
-    
-    if (is.null(hw_model)) {
-      # If model fitting fails, return NA forecasts
-      forecast_list[[v]] <- tibble(!!paste0("predicted_", var_name) := rep(NA, future_length))
-      next
-    }
-    
-    # Generate forecasts for the specified future length
-    future_forecast <- tryCatch({
-      predict(hw_model, n.ahead = future_length)
-    }, error = function(e) {
-      # Handle prediction errors gracefully
-      message(sprintf("Forecasting failed for %s: %s", var_name, e$message))
-      rep(NA, future_length)
-    })
-  }
+        var_name <- selected_vars[v]
+        
+        # Extract and interpolate time series for the current variable
+        ts_data <- loc_data |> 
+          pull(var_name) |> 
+          na.approx(rule = 2)  # Interpolate missing values
+        
+        if (length(ts_data) < 2) {
+          # Not enough data to fit a time series model
+          forecast_list[[v]] <- tibble(!!paste0("predicted_", var_name) := rep(NA, future_length))
+          next
+        }
+        
+        if (var_name %in% c("low_cloud_cover", "total_cloud_cover")) {
+          # Use EMA for cloud variables
+          future_forecast <- tryCatch({
+            ema_forecast <- EMA(ts_data, ratio = 0.1, wilder = TRUE)  # Adjust ratio as needed
+            rep(tail(ema_forecast, 1), future_length)  # Repeat the last EMA value for the forecast length
+          }, error = function(e) {
+            message(sprintf("EMA failed for %s: %s", var_name, e$message))
+            rep(NA, future_length)
+          })
+        } else {
+          # Create time series object for Holt-Winters
+          ts_obj <- ts(ts_data, frequency = 1095)  # Adjust frequency for yearly seasonality
+          
+          # Fit Holt-Winters model
+          hw_model <- tryCatch({
+            HoltWinters(ts_obj)
+          }, error = function(e) {
+            # Handle model fitting errors gracefully
+            message(sprintf("Holt-Winters failed for %s: %s", var_name, e$message))
+            NULL
+          })
+          
+          if (is.null(hw_model)) {
+            # If model fitting fails, return NA forecasts
+            forecast_list[[v]] <- tibble(!!paste0("predicted_", var_name) := rep(NA, future_length))
+            next
+          }
+          
+          # Generate forecasts for the specified future length
+          future_forecast <- tryCatch({
+            predict(hw_model, n.ahead = future_length)
+          }, error = function(e) {
+            # Handle prediction errors gracefully
+            message(sprintf("Forecasting failed for %s: %s", var_name, e$message))
+            rep(NA, future_length)
+          })
+        }
   
   # Store the forecasts
   forecast_list[[v]] <- tibble(!!paste0("predicted_", var_name) := as.numeric(future_forecast))
-}
+  }
 
       
       # Combine all predictions for this location into one tibble
@@ -1019,6 +1019,9 @@ server <- function(input, output, session) {
     req(input$show_interactive_plot)  # Ensure the checkbox is checked
     req(atmos_forecast_results())    # Ensure forecast results exist
     
+    # Ensure that "all_atmos" is selected
+    req(input$atmos_variable_group == "all_atmos")
+    
     # Dynamically select the variable to plot based on user input
     variable_to_plot <- input$selected_variable
     
@@ -1037,7 +1040,7 @@ server <- function(input, output, session) {
       labs(
         x = "Time",
         y = variable_to_plot,
-        title = paste("Predicted", variable_to_plot, "Over Time")
+        title = paste("Predicted", variable_to_plot, "over time")
       ) +
       scale_color_paletteer_c("ggthemes::Blue-Teal", name = "Variable") +
       theme_minimal() +
@@ -1265,50 +1268,39 @@ server <- function(input, output, session) {
         var_name <- selected_vars[v]
         
         # Extract and interpolate time series for the current variable
-        ts_data <- loc_data |>
+        ts_data <- loc_data |> 
           pull(var_name) |> 
           na.approx(rule = 2)  # Interpolate missing values
         
-        # Initialize the forecast array
-        forecasts <- numeric(future_length)
-        
-        # Handle predictions using selected methods for variables
-        for (j in seq_along(forecasts)) {
-          recent_values <- c(ts_data, forecasts[1:(j - 1)])
-          recent_values <- na.approx(recent_values, rule = 2)  # Handle missing values
-          
-          if (length(recent_values) < window_size) {
-            forecasts[j] <- NA  # Not enough data for prediction
-          } else if (var_name == "wind_speed") {
-            # DEMA for wind speed: long-term variability with smoothing
-            forecasts[j] <- tail(DEMA(recent_values, n = 21, v = 1), 1)
-          } else if (var_name == "sea_ice_concentration") {
-            # ALMA for sea ice concentration: bounded and smooth
-            alma_result <- ALMA(recent_values, n = 9, offset = 0.7, sigma = 4)
-            forecasts[j] <- pmax(0, pmin(1, tail(alma_result, 1)))  # Clamp values between 0 and 1
-          } else if (var_name == "mean_sea_level_pressure") {
-            # EMA for mean sea level pressure: capturing seasonal trends
-            forecasts[j] <- tail(EMA(recent_values, ratio = 0.05, wilder = TRUE), 1)
-          } else if (var_name == "sea_surface_temperature") {
-            # EMA for sea surface temperature: capturing seasonal trends
-            forecasts[j] <- tail(EMA(recent_values, ratio = 0.05, wilder = TRUE), 1)
-          } else if (var_name == "significant_height_combined_waves_swell") {
-            # DEMA for significant wave height: responsive smoothing
-            forecasts[j] <- tail(DEMA(recent_values, n = 15, v = 0.4), 1)
-          } else if (var_name %in% c("low_cloud_cover", "total_cloud_cover")) {
-            # SMA for cloud cover: simple smoothing
-            forecasts[j] <- tail(SMA(recent_values, n = 42), 1)
-          } else if (var_name %in% c("max_wind_gust", "instantaneous_wind_gust")) {
-            # HMA for wind gusts: smooth and responsive
-            forecasts[j] <- tail(HMA(recent_values, n = 6), 1)
-          } else {
-            # Default EMA for other variables
-            forecasts[j] <- tail(EMA(recent_values, ratio = 0.2), 1)
-          }
+        if (length(ts_data) < 2) {
+          # Not enough data to fit a time series model
+          forecast_list[[v]] <- tibble(!!paste0("predicted_", var_name) := rep(NA, future_length))
+          next
         }
         
-        # Store the forecasts in the forecast list
-        forecast_list[[v]] <- tibble(!!paste0("predicted_", var_name) := forecasts)
+        if (var_name %in% c("low_cloud_cover", "total_cloud_cover")) {
+          # Use EMA for cloud variables
+          future_forecast <- tryCatch({
+            ema_forecast <- EMA(ts_data, ratio = 0.01, wilder = TRUE)  # Adjust ratio as needed
+            rep(tail(ema_forecast, 1), future_length)  # Repeat the last EMA value for the forecast length
+          }, error = function(e) {
+            message(sprintf("EMA failed for %s: %s", var_name, e$message))
+            rep(NA, future_length)
+          })
+        } else {
+          # Use Holt-Winters for other variables
+          future_forecast <- tryCatch({
+            ts_obj <- ts(ts_data, frequency = 1095)  # Adjust frequency for yearly seasonality
+            hw_model <- HoltWinters(ts_obj)
+            predict(hw_model, n.ahead = future_length)
+          }, error = function(e) {
+            message(sprintf("Holt-Winters failed for %s: %s", var_name, e$message))
+            rep(NA, future_length)
+          })
+        }
+        
+        # Store the forecasts
+        forecast_list[[v]] <- tibble(!!paste0("predicted_", var_name) := as.numeric(future_forecast))
       }
       
       # Combine all predictions for this location
@@ -1535,12 +1527,12 @@ server <- function(input, output, session) {
         filter(as.Date(time) == as.Date(input$route_selected_date)) 
       
       # Apply time filtering if a specific time is selected
-      if (input$selected_time != "all_day") {
+      if (input$route_selected_time != "all_day") {
         safety_map_data <- safety_map_data |>
           filter(format(time, "%H:%M:%S") == input$route_selected_time)
       }
       
-      # Join with route points and categorize using Beaufort Scale
+      # Join with route points and categorize using Beaufort Scale and Douglas Scale
       safety_map_data <- safety_map_data |> 
         semi_join(route_points$route, by = c("longitude", "latitude")) |> 
         mutate(
@@ -1564,6 +1556,7 @@ server <- function(input, output, session) {
             predicted_wind_speed >= 28.4 & predicted_wind_speed < 32.6 ~ "11 (Violent Storm)",
             predicted_wind_speed >= 32.6 ~ "12 (Hurricane)"
           ),
+          # Douglas Scale categories
           douglas_category = case_when(
             predicted_significant_height_combined_waves_swell == 0 ~ "0 Calm (glassy)",
             predicted_significant_height_combined_waves_swell > 0 & predicted_significant_height_combined_waves_swell <= 0.1 ~ "1 Calm (rippled)",
@@ -1619,21 +1612,30 @@ server <- function(input, output, session) {
         )
       
       # Wrap the ggplot object in a girafe interactive object
-      girafe(ggobj = p, options = list(
-        opts_hover(css = "fill:orange;"),       # Change color on hover
-        opts_hover_inv(css = "opacity:0.5;"),   # Lower opacity for non-hovered areas
-        opts_tooltip(css = "font-size: 14px;")  # Tooltip styling
-      ))
+      interactive_map <- girafe(ggobj = p)
+      
+      # Add zoom capability
+      interactive_map <- girafe_options(interactive_map,
+                                        opts_hover(css = "fill:orange;"),       # Change color on hover
+                                        opts_hover_inv(css = "opacity:0.5;"),   # Lower opacity for non-hovered areas
+                                        opts_tooltip(css = "font-size: 14px;"), # Tooltip styling
+                                        opts_zoom(min = 0.5, max = 5)           # Enable zoom with limits
+      )
+      
+      # Return the interactive map
+      interactive_map
     })
   })
   
-
 # Route interactive plot for all variables --------------------------------
 
   # Interactive Plot for Route Tab
   output$route_interactive_plot <- renderPlot({
     req(input$route_show_interactive_plot)  # Ensure the checkbox is checked
     req(route_forecast_results())          # Ensure forecast results exist
+    
+    # Ensure that all variables are selected
+    req(input$route_variable_group == "extended")
     
     # Dynamically select the variable to plot based on user input
     variable_to_plot <- input$route_selected_variable
@@ -1648,7 +1650,7 @@ server <- function(input, output, session) {
     # Generate the interactive plot
     processed_data |>
       ggplot(aes(x = time, y = .data[[variable_to_plot]])) +
-      geom_line(color = "blue") +
+      geom_line(color = "coral") +
       geom_smooth() +
       labs(
         x = "Time",
