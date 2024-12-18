@@ -193,9 +193,8 @@ ui <- navbarPage(
           "route_variable_group",  # Unique ID
           "Variables to Predict:",
           choices = list(
-            "Basic Variables (Safety-Related)" = "basic",
-            "Extended Variables (10 Variables)" = "extended",
-            "All Variables" = "all"
+            "Basic variables (safety-related only)" = "basic",
+            "Extended variables (all)" = "extended"
           ),
           selected = "basic"
         ),
@@ -242,6 +241,42 @@ ui <- navbarPage(
         
         hr(),
         
+        h3("Interactive Visualization"),
+        conditionalPanel(
+          condition = "input.route_variable_group == 'extended'",
+          checkboxInput("route_show_interactive_plot", "Show Interactive Plot", value = TRUE),
+          selectInput(
+            "route_selected_variable",
+            "Select Variable to Display:",
+            choices = c(
+              "Wind Gust Factor" = "predicted_wind_gust_factor",
+              "Wind Speed [m/s]" = "predicted_wind_speed",
+              "Mean Wave Direction [°]" = "predicted_mean_wave_direction",
+              "Mean Wave Period [s]" = "predicted_mean_wave_period",
+              "Significant Height of Combined Waves and Swell [m]" = "predicted_significant_height_combined_waves_swell",
+              "Max Individual Wave Height [m]" = "predicted_max_individual_wave_height",
+              "Peak Wave Period [s]" = "predicted_peak_wave_period",
+              "Significant Height of Wind Waves [m]" = "predicted_significant_height_of_wind_waves",
+              "Mean Sea Level Pressure [hPa]" = "predicted_mean_sea_level_pressure",
+              "Sea Surface Temperature [°C]" = "predicted_sea_surface_temperature",
+              "Surface Pressure [hPa]" = "predicted_surface_pressure",
+              "Max Wind Gust [m/s]" = "predicted_max_wind_gust",
+              "Instantaneous Wind Gust [m/s]" = "predicted_instantaneous_wind_gust",
+              "Low Cloud Cover [%]" = "predicted_low_cloud_cover",
+              "Total Cloud Cover [%]" = "predicted_total_cloud_cover",
+              "Convective Available Potential Energy [J/kg]" = "predicted_convective_available_potential_energy",
+              "Sea Ice Concentration [0-1]" = "predicted_sea_ice_concentration",
+              "Wind Direction [°]" = "predicted_wind_direction",
+              "K Index" = "predicted_k_index",
+              "Total Totals Index" = "predicted_total_totals_index",
+              "Wavelength [m]" = "predicted_wavelength"
+            ),
+            selected = "predicted_wind_speed"
+          )
+        ),
+        
+        hr(),
+        
         h3("Messages"),
         verbatimTextOutput("route_saved_message")
       ),
@@ -263,6 +298,14 @@ ui <- navbarPage(
         
         h3("Interactive Map"),
         girafeOutput("route_interactive_map", height = "800px", width = "1200px"),
+        
+        hr(),
+        
+        h3("Interactive Plot for All Variables"),
+        conditionalPanel(
+          condition = "input.route_show_interactive_plot == true",
+          plotOutput("route_interactive_plot", height = "600px", width = "800px")
+        ),
         
         hr(),
         
@@ -619,7 +662,7 @@ server <- function(input, output, session) {
           if (length(recent_values) < window_size) {
             forecasts[j] <- NA
           } else if (var_name == "wind_speed") {
-            forecasts[j] <- tail(DEMA(recent_values, n = 30, v = 0.2), 1)
+            forecasts[j] <- tail(DEMA(recent_values, n = 21, v = 1), 1)
           } else if (var_name == "sea_ice_concentration") {
             alma_result <- ALMA(recent_values, n = 9, offset = 0.7, sigma = 4)
             forecasts[j] <- pmax(0, pmin(1, tail(alma_result, 1)))
@@ -984,11 +1027,29 @@ server <- function(input, output, session) {
   # Define variable groups for the Route Tab
   route_variable_groups <- list(
     basic = c("wind_speed", "significant_height_combined_waves_swell", "sea_ice_concentration"),
-    extended = c("wind_speed", "significant_height_combined_waves_swell", "sea_ice_concentration",
-                 "mean_wave_period", "sea_surface_temperature", "mean_sea_level_pressure",
-                 "surface_pressure", "max_wind_gust", "instantaneous_wind_gust", "low_cloud_cover"),
-    all = colnames(baltic_data)[sapply(baltic_data, is.numeric) &
-                                  !colnames(baltic_data) %in% c("longitude", "latitude")]
+    extended = c(
+      "wind_gust_factor",
+      "wind_speed",
+      "mean_wave_direction",
+      "mean_wave_period",
+      "significant_height_combined_waves_swell",
+      "max_individual_wave_height",
+      "peak_wave_period",
+      "significant_height_of_wind_waves",
+      "mean_sea_level_pressure",
+      "sea_surface_temperature",
+      "surface_pressure",
+      "max_wind_gust",
+      "instantaneous_wind_gust",
+      "low_cloud_cover",
+      "total_cloud_cover",
+      "convective_available_potential_energy",
+      "sea_ice_concentration",
+      "wind_direction",
+      "k_index",
+      "total_totals_index",
+      "wavelength"
+    )
   )
   
   # Reactive expression for selected Route Tab variables
@@ -1197,27 +1258,30 @@ server <- function(input, output, session) {
           if (length(recent_values) < window_size) {
             forecasts[j] <- NA  # Not enough data for prediction
           } else if (var_name == "wind_speed") {
-            # EMA for wind speed: short-term variability
-            ema_result <- EMA(recent_values, ratio = 0.7)
-            forecasts[j] <- tail(ema_result, 1)
-          } else if (var_name == "significant_height_combined_waves_swell" || 
-                     var_name == "mean_wave_period") {
-            # DEMA for wave height and wave period: responsive and smooth
-            dema_result <- DEMA(recent_values, n = 18)
-            forecasts[j] <- tail(dema_result, 1)
-          } else if (var_name == "sea_surface_temperature" || 
-                     var_name == "mean_sea_level_pressure") {
-            # EMA for SST and MSLP: seasonal trends
-            ema_result <- EMA(recent_values, ratio = 0.05, wilder = TRUE)
-            forecasts[j] <- tail(ema_result, 1)
+            # DEMA for wind speed: long-term variability with smoothing
+            forecasts[j] <- tail(DEMA(recent_values, n = 21, v = 1), 1)
           } else if (var_name == "sea_ice_concentration") {
             # ALMA for sea ice concentration: bounded and smooth
-            alma_result <- ALMA(recent_values, n = 9, offset = 0.85, sigma = 6)
+            alma_result <- ALMA(recent_values, n = 9, offset = 0.7, sigma = 4)
             forecasts[j] <- pmax(0, pmin(1, tail(alma_result, 1)))  # Clamp values between 0 and 1
+          } else if (var_name == "mean_sea_level_pressure") {
+            # EMA for mean sea level pressure: capturing seasonal trends
+            forecasts[j] <- tail(EMA(recent_values, ratio = 0.05, wilder = TRUE), 1)
+          } else if (var_name == "sea_surface_temperature") {
+            # EMA for sea surface temperature: capturing seasonal trends
+            forecasts[j] <- tail(EMA(recent_values, ratio = 0.05, wilder = TRUE), 1)
+          } else if (var_name == "significant_height_combined_waves_swell") {
+            # DEMA for significant wave height: responsive smoothing
+            forecasts[j] <- tail(DEMA(recent_values, n = 15, v = 0.4), 1)
+          } else if (var_name %in% c("low_cloud_cover", "total_cloud_cover")) {
+            # SMA for cloud cover: simple smoothing
+            forecasts[j] <- tail(SMA(recent_values, n = 42), 1)
+          } else if (var_name %in% c("max_wind_gust", "instantaneous_wind_gust")) {
+            # HMA for wind gusts: smooth and responsive
+            forecasts[j] <- tail(HMA(recent_values, n = 6), 1)
           } else {
             # Default EMA for other variables
-            ema_result <- EMA(recent_values, ratio = 0.2)
-            forecasts[j] <- tail(ema_result, 1)
+            forecasts[j] <- tail(EMA(recent_values, ratio = 0.2), 1)
           }
         }
         
@@ -1539,6 +1603,39 @@ server <- function(input, output, session) {
         opts_tooltip(css = "font-size: 14px;")  # Tooltip styling
       ))
     })
+  })
+  
+
+# Route interactive plot for all variables --------------------------------
+
+  # Interactive Plot for Route Tab
+  output$route_interactive_plot <- renderPlot({
+    req(input$route_show_interactive_plot)  # Ensure the checkbox is checked
+    req(route_forecast_results())          # Ensure forecast results exist
+    
+    # Dynamically select the variable to plot based on user input
+    variable_to_plot <- input$route_selected_variable
+    
+    # Preprocess data for specific variable conversions
+    processed_data <- route_forecast_results() |>
+      mutate(
+        predicted_mean_sea_level_pressure = predicted_mean_sea_level_pressure / 100,
+        predicted_surface_pressure = predicted_surface_pressure / 100
+      )
+    
+    # Generate the interactive plot
+    processed_data |>
+      ggplot(aes(x = time, y = .data[[variable_to_plot]])) +
+      geom_line(color = "blue") +
+      geom_smooth() +
+      labs(
+        x = "Time",
+        y = variable_to_plot,
+        title = paste(variable_to_plot, " over time")
+      ) +
+      scale_color_paletteer_c("ggthemes::Blue-Teal", name = "Variable") +
+      theme_minimal() +
+      theme(legend.position = "top")
   })
 
 # Plot tab ----------------------------------------------------------------
