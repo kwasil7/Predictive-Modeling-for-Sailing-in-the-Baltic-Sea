@@ -53,6 +53,12 @@ ui <- navbarPage(
           ),
           selected = "basic"
         ),
+        selectInput(
+          "atmos_sailor_experience", 
+          "Sailor Experience Level:",
+          choices = c("Beginner" = "beginner", "Intermediate/Advanced" = "advanced"),
+          selected = "beginner"
+        ),
         dateRangeInput(
           "prediction_date_range", 
           "Select Prediction Date Range:",
@@ -159,6 +165,12 @@ ui <- navbarPage(
             "All Variables" = "all"
           ),
           selected = "basic"
+        ),
+        selectInput(
+          "route_sailor_experience", 
+          "Sailor Experience Level:",
+          choices = c("Beginner" = "beginner", "Intermediate/Advanced" = "advanced"),
+          selected = "beginner"
         ),
         dateRangeInput(
           "route_prediction_date_range",  # Unique ID
@@ -579,7 +591,7 @@ server <- function(input, output, session) {
           } else if (var_name == "mean_sea_level_pressure") {
             ema_result <- EMA(recent_values, ratio = 0.05, wilder = TRUE)  # Moderate trends
             forecasts[j] <- tail(ema_result, 1)
-          } else if (var_name == "wave_height") {
+          } else if (var_name == "significant_height_combined_waves_swell") {
             ema_result <- EMA(recent_values, ratio = 0.5)  # Seasonal variability
             forecasts[j] <- tail(ema_result, 1)
           } else if (var_name == "mean_wave_period") {
@@ -620,27 +632,37 @@ server <- function(input, output, session) {
     print(head(atmos_forecast_results()))
   })
   
-  # Add safety labels to atmospheric forecast results
+  # Add safety labels to atmospheric forecast results based on sailor experience
   observeEvent(input$atmos_predict, {
     # Ensure atmospheric forecast results exist
     req(atmos_forecast_results())
+    
+    # Determine experience level from input
+    experience_level <- input$atmos_sailor_experience # 'beginner' or 'advanced'
     
     # Add safety labels to the forecast results
     updated_results <- atmos_forecast_results() |> 
       mutate(
         safety_label = case_when(
+          # Logic for Beginner Sailors (more conservative thresholds)
+          experience_level == "beginner" & predicted_wind_speed >= 5.5 & predicted_wind_speed < 8.0 ~ "Risky",
+          experience_level == "beginner" & predicted_wind_speed >= 8.0 ~ "Unsafe",
+          experience_level == "beginner" & predicted_sea_ice_concentration > 0.15 ~ "Unsafe",
+          
+          # Logic for Intermediate/Advanced Sailors
           predicted_wind_speed >= 10.8 ~ "Unsafe",
           predicted_sea_ice_concentration > 0.3 ~ "Risky",
           predicted_wind_speed >= 8.0 & predicted_wind_speed < 10.8 ~ "Risky",
+          
+          # Safe for all levels
           TRUE ~ "Safe"
         )
       )
     
     # Update the reactiveVal with safety labels
     atmos_forecast_results(updated_results)
-    print("Safety labels assigned for atmospheric data.")
-    print(head(atmos_forecast_results()))
   })
+  
   
   # Enable/disable prediction button based on route_saved
   observe({
@@ -1130,9 +1152,9 @@ server <- function(input, output, session) {
           if (length(recent_values) < window_size) {
             forecasts[j] <- NA  # Not enough data for prediction
           } else if (var_name == "significant_height_combined_waves_swell") {
-            # SMA for wave height: stable with moderate smoothing
-            sma_result <- SMA(recent_values, n = 9)  # Smooth over ~3-day window
-            forecasts[j] <- tail(sma_result, 1)
+            # DEMA for wave height: responsive and smooth
+            dema_result <- DEMA(recent_values, n = 18)
+            forecasts[j] <- tail(dema_result, 1)
           } else if (var_name == "sea_surface_temperature") {
             ema_result <- EMA(recent_values, ratio = 0.05, wilder = TRUE)  # Strong seasonal trends
             forecasts[j] <- tail(ema_result, 1)
@@ -1144,9 +1166,9 @@ server <- function(input, output, session) {
             ema_result <- EMA(recent_values, ratio = 0.7)
             forecasts[j] <- tail(ema_result, 1)
           } else if (var_name == "sea_ice_concentration") {
-            # EMA for sea ice: moderate smoothing for variability
-            ema_result <- EMA(recent_values, ratio = 0.1)
-            forecasts[j] <- tail(ema_result, 1)
+            # ALMA for sea ice concentration with clamping
+            alma_result <- ALMA(recent_values, n = 12, offset = 0.85, sigma = 6)
+            forecasts[j] <- pmax(0, pmin(1, tail(alma_result, 1)))
           } else {
             # Default to EMA for general variables with longer-term trends
             ema_result <- EMA(recent_values, ratio = 0.2)
@@ -1176,23 +1198,38 @@ server <- function(input, output, session) {
     print("Predictions complete.")
   })
   
-  # Assign safety labels to forecast results
+  # Assign safety labels to route forecast results based on sailor experience
   observeEvent(input$route_start_prediction, {
     req(route_forecast_results())
     
+    # Determine experience level from input
+    experience_level <- input$route_sailor_experience  # 'beginner' or 'advanced'
+    
+    # Add safety labels to the forecast results
     updated_results <- route_forecast_results() |> 
       mutate(
         safety_label = case_when(
+          # Conditions for Beginner Sailors (conservative thresholds)
+          experience_level == "beginner" & predicted_wind_speed >= 5.5 & predicted_wind_speed < 8.0 ~ "Risky",
+          experience_level == "beginner" & predicted_wind_speed >= 8.0 ~ "Unsafe",
+          experience_level == "beginner" & predicted_significant_height_combined_waves_swell >= 1.25 & 
+            predicted_significant_height_combined_waves_swell < 3.0 ~ "Risky",
+          experience_level == "beginner" & predicted_significant_height_combined_waves_swell >= 3.0 ~ "Unsafe",
+          experience_level == "beginner" & predicted_sea_ice_concentration > 0.15 ~ "Unsafe",
+          
+          # Conditions for Intermediate/Advanced Sailors
           predicted_wind_speed >= 10.8 ~ "Unsafe",
-          predicted_significant_height_combined_waves_swell >= 3 ~ "Unsafe",
+          predicted_significant_height_combined_waves_swell >= 2.5 ~ "Unsafe",
           predicted_sea_ice_concentration > 0.3 ~ "Risky",
           predicted_wind_speed >= 8.0 & predicted_wind_speed < 10.8 ~ "Risky",
+          
+          # Safe for all levels
           TRUE ~ "Safe"
         )
       )
     
+    # Update the reactiveVal with safety labels
     route_forecast_results(updated_results)
-    print("Safety labels assigned.")
   })
   
   # Render safety map
