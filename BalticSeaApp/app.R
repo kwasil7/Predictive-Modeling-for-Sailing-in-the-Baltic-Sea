@@ -96,6 +96,32 @@ ui <- navbarPage(
         
         hr(),
         
+        h3("Interactive Visualization"),
+        conditionalPanel(
+          condition = "input.atmos_variable_group == 'all_atmos'",
+          checkboxInput("show_interactive_plot", "Show Interactive Plot", value = TRUE),
+          selectInput(
+            "selected_variable",
+            "Select Variable to Display:",
+            choices = c(
+              "Wind Speed [m/s]" = "predicted_wind_speed",
+              "Mean Sea Level Pressure [hPa]" = "predicted_mean_sea_level_pressure",
+              "Sea Surface Temperature [°C]" = "predicted_sea_surface_temperature",
+              "Surface Pressure" = "predicted_surface_pressure",
+              "Max Wind Gust [m/s]" = "predicted_max_wind_gust",
+              "Instantaneous Wind Gust [m/s]" = "predicted_instantaneous_wind_gust",
+              "Low Cloud Cover" = "predicted_low_cloud_cover",
+              "Total Cloud Cover" = "predicted_total_cloud_cover",
+              "Precipitation Type" = "predicted_precipitation_type",
+              "Convective Available Potential Energy" = "predicted_convective_available_potential_energy",
+              "Sea Ice Concentration" = "predicted_sea_ice_concentration"
+            ),
+            selected = "predicted_wind_speed"
+          )
+        ),
+        
+        hr(),
+        
         h3("Messages"),
         verbatimTextOutput("atmos_saved_message")
       ),
@@ -125,11 +151,18 @@ ui <- navbarPage(
         
         hr(),
         
-        div(id = "additional_plots", style = "display: none;",
-            h3("Atmospheric Variables Insights"),
+        hr(),
+        
+        div(id = "atmos_additional_plots", style = "display: none;",
+            h3("Variables Insights"),
             plotOutput("atmos_wind_speed_plot", height = "400px"),
-            plotOutput("atmos_sea_level_pressure_plot", height = "400px"),
-            plotOutput("atmos_sea_surface_temperature_plot", height = "400px")
+            plotOutput("atmos_sea_ice_plot", height = "400px")
+        ),
+        
+        conditionalPanel(
+          condition = "input.atmos_variable_group == 'all_atmos' && input.show_interactive_plot == true",
+          h3("Interactive Plot for All Variables"),
+          plotOutput("atmos_interactive_plot", height = "600px", width = "800px")
         )
       )
     )
@@ -374,6 +407,9 @@ library(forecast)
 scale_colour_paletteer_d("ggsci::light_blue_material")
 scale_fill_paletteer_d("ggsci::light_blue_material")
 
+scale_color_paletteer_c("ggthemes::Blue-Teal")
+scale_fill_paletteer_c("ggthemes::Blue-Teal")
+
 # Define Server Logic
 server <- function(input, output, session) {
   
@@ -517,9 +553,6 @@ server <- function(input, output, session) {
     req(atmos_points$route)
     req(atmos_points$route_saved)
     
-    print("Using selected route for atmospheric predictions...")
-    print("Starting atmospheric predictions...")
-    
     # Forecast logic for atmospheric data...
     # Get the selected variables
     selected_vars <- atmos_selected_variables()
@@ -581,30 +614,28 @@ server <- function(input, output, session) {
         
         for (j in seq_along(forecasts)) {
           recent_values <- c(ts_data, forecasts[1:(j - 1)])
-          recent_values <- na.approx(recent_values, rule = 2)
+          recent_values <- na.approx(recent_values, rule = 2)  # Handle missing values
           
           if (length(recent_values) < window_size) {
             forecasts[j] <- NA
-          } else if (var_name == "sea_surface_temperature") {
-            ema_result <- EMA(recent_values, ratio = 0.05, wilder = TRUE)  # Strong seasonal trends
-            forecasts[j] <- tail(ema_result, 1)
-          } else if (var_name == "mean_sea_level_pressure") {
-            ema_result <- EMA(recent_values, ratio = 0.05, wilder = TRUE)  # Moderate trends
-            forecasts[j] <- tail(ema_result, 1)
-          } else if (var_name == "significant_height_combined_waves_swell") {
-            ema_result <- EMA(recent_values, ratio = 0.5)  # Seasonal variability
-            forecasts[j] <- tail(ema_result, 1)
-          } else if (var_name == "mean_wave_period") {
-            ema_result <- EMA(recent_values, ratio = 0.5)  # Similar to wave height
-            forecasts[j] <- tail(ema_result, 1)
           } else if (var_name == "wind_speed") {
-            ema_result <- EMA(recent_values, ratio = 0.7)  # Short-term variability
-            noise <- rnorm(1, mean = 0, sd = 0.1)          # Add Gaussian noise with small sd
-            # Add noise to EMA result and ensure the result is not below zero
-            forecasts[j] <- pmax(tail(ema_result, 1) + noise, 0)
+            forecasts[j] <- tail(DEMA(recent_values, n = 30, v = 0.2), 1)
+          } else if (var_name == "sea_ice_concentration") {
+            alma_result <- ALMA(recent_values, n = 9, offset = 0.7, sigma = 4)
+            forecasts[j] <- pmax(0, pmin(1, tail(alma_result, 1)))
+          } else if (var_name == "mean_sea_level_pressure") {
+            forecasts[j] <- tail(EMA(recent_values, ratio = 0.05, wilder = TRUE), 1)
+          } else if (var_name == "sea_surface_temperature") {
+            forecasts[j] <- tail(EMA(recent_values, ratio = 0.05, wilder = TRUE), 1)
+          } else if (var_name == "significant_height_combined_waves_swell") {
+            forecasts[j] <- tail(DEMA(recent_values, n = 15, v = 0.4), 1)
+          } else if (var_name %in% c("low_cloud_cover", "total_cloud_cover")) {
+            forecasts[j] <- tail(SMA(recent_values, n = 10), 1)
+          } else if (var_name %in% c("max_wind_gust", "instantaneous_wind_gust")) {
+            forecasts[j] <- tail(HMA(recent_values, n = 6), 1)
           } else {
-            sma_result <- SMA(recent_values, n = 9)  # General smoothing
-            forecasts[j] <- tail(sma_result, 1)
+            # Default smoothing
+            forecasts[j] <- tail(EMA(recent_values, ratio = 0.2), 1)
           }
         }
         
@@ -759,10 +790,10 @@ server <- function(input, output, session) {
   
   # Show/Hide Additional Plots Based on Prediction Variables
   observe({
-    if (input$atmos_variable_group == "all_atmos") {
-      shinyjs::show("additional_plots")
+    if (input$atmos_variable_group == "basic") {
+      shinyjs::show("atmos_additional_plots")
     } else {
-      shinyjs::hide("additional_plots")
+      shinyjs::hide("atmos_additional_plots")
     }
   })
   
@@ -782,36 +813,18 @@ server <- function(input, output, session) {
       theme_minimal()
   })
   
-  # Mean Sea Level Pressure Plot
-  output$atmos_sea_level_pressure_plot <- renderPlot({
+  # Sea ice concentration plot
+  output$atmos_sea_ice_plot <- renderPlot({
     req(atmos_forecast_results())
     
     atmos_forecast_results() |>
-      mutate(predicted_mean_sea_level_pressure_hpa = predicted_mean_sea_level_pressure / 100) |>
-      ggplot(aes(x = time, y = predicted_mean_sea_level_pressure_hpa)) +
-      geom_line(color = "darkgreen") +
-      geom_smooth(se = FALSE, color = "orange") +
-      labs(
-        x = "Time",
-        y = "Sea Level Pressure [hPa]",
-        title = "Predicted Mean Sea Level Pressure Over Time"
-      ) +
-      theme_minimal()
-  })
-  
-  # Sea Surface Temperature Plot
-  output$atmos_sea_surface_temperature_plot <- renderPlot({
-    req(atmos_forecast_results())
-    
-    atmos_forecast_results() |>
-      mutate(predicted_sea_surface_temperature_c = predicted_sea_surface_temperature - 273.15) |>
-      ggplot(aes(x = time, y = predicted_sea_surface_temperature_c)) +
+      ggplot(aes(x = time, y = predicted_sea_ice_concentration)) +
       geom_line(color = "blue") +
       geom_smooth(se = FALSE, color = "aquamarine") +
       labs(
         x = "Time",
-        y = "Sea Surface Temperature [°C]",
-        title = "Predicted Sea Surface Temperature Over Time"
+        y = "Sea ice concentration [0; 1]",
+        title = "Predicted sea ice concentration over time"
       ) +
       theme_minimal()
   })
@@ -932,6 +945,38 @@ server <- function(input, output, session) {
         opts_tooltip(css = "font-size: 14px;")  # Tooltip styling
       ))
     })
+  })
+  
+
+# Interactive plot for all atmospheric variables --------------------------
+
+  output$atmos_interactive_plot <- renderPlot({
+    req(input$show_interactive_plot)  # Ensure the checkbox is checked
+    req(atmos_forecast_results())    # Ensure forecast results exist
+    
+    # Dynamically select the variable to plot based on user input
+    variable_to_plot <- input$selected_variable
+    
+    # Preprocess data for specific variable conversions
+    processed_data <- atmos_forecast_results() |>
+      mutate(
+        predicted_sea_surface_temperature = predicted_sea_surface_temperature - 273.15,
+        predicted_mean_sea_level_pressure = predicted_mean_sea_level_pressure / 100,
+        predicted_surface_pressure = predicted_surface_pressure / 100
+      )
+    
+    # Generate the interactive plot
+    processed_data |>
+      ggplot(aes(x = time, y = .data[[variable_to_plot]])) +
+      geom_line(size = 1, color = "blue") +
+      labs(
+        x = "Time",
+        y = variable_to_plot,
+        title = paste("Predicted", variable_to_plot, "Over Time")
+      ) +
+      scale_color_paletteer_c("ggthemes::Blue-Teal", name = "Variable") +
+      theme_minimal() +
+      theme(legend.position = "top")
   })
   
 # Route selection tab 0.5 degrees -----------------------------------------
@@ -1144,33 +1189,33 @@ server <- function(input, output, session) {
         # Initialize the forecast array
         forecasts <- numeric(future_length)
         
-        # Handle predictions using predicted values iteratively
+        # Handle predictions using selected methods for variables
         for (j in seq_along(forecasts)) {
           recent_values <- c(ts_data, forecasts[1:(j - 1)])
           recent_values <- na.approx(recent_values, rule = 2)  # Handle missing values
           
           if (length(recent_values) < window_size) {
             forecasts[j] <- NA  # Not enough data for prediction
-          } else if (var_name == "significant_height_combined_waves_swell") {
-            # DEMA for wave height: responsive and smooth
-            dema_result <- DEMA(recent_values, n = 18)
-            forecasts[j] <- tail(dema_result, 1)
-          } else if (var_name == "sea_surface_temperature") {
-            ema_result <- EMA(recent_values, ratio = 0.05, wilder = TRUE)  # Strong seasonal trends
-            forecasts[j] <- tail(ema_result, 1)
-          } else if (var_name == "mean_sea_level_pressure") {
-            ema_result <- EMA(recent_values, ratio = 0.05, wilder = TRUE)  # Moderate trends
-            forecasts[j] <- tail(ema_result, 1)
           } else if (var_name == "wind_speed") {
-            # EMA for wind speed: responsive with moderate variability
+            # EMA for wind speed: short-term variability
             ema_result <- EMA(recent_values, ratio = 0.7)
             forecasts[j] <- tail(ema_result, 1)
+          } else if (var_name == "significant_height_combined_waves_swell" || 
+                     var_name == "mean_wave_period") {
+            # DEMA for wave height and wave period: responsive and smooth
+            dema_result <- DEMA(recent_values, n = 18)
+            forecasts[j] <- tail(dema_result, 1)
+          } else if (var_name == "sea_surface_temperature" || 
+                     var_name == "mean_sea_level_pressure") {
+            # EMA for SST and MSLP: seasonal trends
+            ema_result <- EMA(recent_values, ratio = 0.05, wilder = TRUE)
+            forecasts[j] <- tail(ema_result, 1)
           } else if (var_name == "sea_ice_concentration") {
-            # ALMA for sea ice concentration with clamping
-            alma_result <- ALMA(recent_values, n = 12, offset = 0.85, sigma = 6)
-            forecasts[j] <- pmax(0, pmin(1, tail(alma_result, 1)))
+            # ALMA for sea ice concentration: bounded and smooth
+            alma_result <- ALMA(recent_values, n = 9, offset = 0.85, sigma = 6)
+            forecasts[j] <- pmax(0, pmin(1, tail(alma_result, 1)))  # Clamp values between 0 and 1
           } else {
-            # Default to EMA for general variables with longer-term trends
+            # Default EMA for other variables
             ema_result <- EMA(recent_values, ratio = 0.2)
             forecasts[j] <- tail(ema_result, 1)
           }
