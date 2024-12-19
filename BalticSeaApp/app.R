@@ -1949,7 +1949,7 @@ server <- function(input, output, session) {
       ggplot(aes(x = category, y = value, fill = category)) +
       geom_violin(alpha = 0.8) +
       theme_minimal() +
-      scale_fill_brewer(palette = "Set3") +
+      scale_fill_brewer(palette = "Set3", name = "Category") +
       labs(
         title = paste(
           "Distribution of", input$violin_y, 
@@ -1959,9 +1959,11 @@ server <- function(input, output, session) {
         y = input$violin_y   # Use the actual variable name for the Y-axis
       ) +
       theme(
-        axis.text.x = element_text(angle = 45, hjust = 1, size = 10),  # Rotate and adjust text size
-        axis.title.x = element_text(size = 12, face = "bold"),         # Adjust X-axis title
-        axis.title.y = element_text(size = 12, face = "bold")          # Adjust Y-axis title
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 12), 
+        axis.title.x = element_text(size = 12, face = "bold"),
+        axis.title.y = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 14),         
+        legend.text = element_text(size = 12) 
       )
   })
 }
