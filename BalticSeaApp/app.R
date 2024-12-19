@@ -786,9 +786,13 @@ server <- function(input, output, session) {
     
     # Combine all results into a single data frame and update reactiveVal
     atmos_forecast_results(bind_rows(results))
-    print("Atmospheric predictions complete.")
-    print("Updated atmos_forecast_results:")
-    print(head(atmos_forecast_results()))
+    
+    # Notify user of successful predictions
+    showNotification(
+      "Predictions have finished! You can now visualize the Safety Map.",
+      type = "message",
+      duration = 5
+    )
   })
   
   # Add safety labels to atmospheric forecast results based on sailor experience
@@ -1416,7 +1420,13 @@ server <- function(input, output, session) {
     
     # Combine all results into a single data frame and update reactiveVal
     route_forecast_results(bind_rows(results))
-    print("Predictions complete.")
+    
+    # Notify user of successful predictions
+    showNotification(
+      "Predictions have finished! You can now visualize the Safety Map.",
+      type = "message",
+      duration = 5
+    )
   })
   
   # Assign safety labels to route forecast results based on sailor experience
