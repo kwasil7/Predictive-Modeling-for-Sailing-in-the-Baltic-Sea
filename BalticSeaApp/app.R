@@ -130,8 +130,8 @@ ui <- navbarPage(
               "Low cloud cover [%]" = "predicted_low_cloud_cover",
               "Total cloud cover [%]" = "predicted_total_cloud_cover",
               "Precipitation type" = "predicted_precipitation_type",
-              "Convective available potential energy" = "predicted_convective_available_potential_energy",
-              "Sea ice concentration" = "predicted_sea_ice_concentration"
+              "Convective available potential energy [J/kg]" = "predicted_convective_available_potential_energy",
+              "Sea ice concentration [0-1]" = "predicted_sea_ice_concentration"
             ),
             selected = "predicted_wind_speed",
             options = pickerOptions(
@@ -177,6 +177,7 @@ ui <- navbarPage(
         div(id = "atmos_additional_plots", style = "display: none;",
             h3("Variables Insights"),
             plotOutput("atmos_wind_speed_plot", height = "400px"),
+            br(),
             plotOutput("atmos_sea_ice_plot", height = "400px")
         ),
         
@@ -375,10 +376,10 @@ ui <- navbarPage(
         helpText(
           "This tab is intended for the results of exploratory data analysis (EDA) ",
           "of the dataset provided by the Copernicus Climate Data Store: ",
-          a("ERA5 Reanalysis Single Levels", 
+          a("ERA5 Reanalysis Single Levels.", 
             href = "https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels?tab=overview",
-            target = "_blank"),
-          ". Select variables and time ranges below to visualize historical trends."
+            target = "_blank"), br(), br(),
+          "Select variables and time ranges below to visualize historical trends."
         ),
         br(),
         
@@ -394,9 +395,9 @@ ui <- navbarPage(
             "Max individual wave height [m]" = "max_individual_wave_height",
             "Peak wave period [s]" = "peak_wave_period",
             "Significant height of wind waves [m]" = "significant_height_of_wind_waves",
-            "Mean sea level pressure [hPa]" = "mean_sea_level_pressure",
+            "Mean sea level pressure [Pa]" = "mean_sea_level_pressure",
             "Sea surface temperature [°C]" = "sea_surface_temperature",
-            "Surface pressure [hPa]" = "surface_pressure",
+            "Surface pressure [Pa]" = "surface_pressure",
             "Max wind gust [m/s]" = "max_wind_gust",
             "Instantaneous wind gust [m/s]" = "instantaneous_wind_gust",
             "Low cloud cover [%]" = "low_cloud_cover",
@@ -456,12 +457,12 @@ ui <- navbarPage(
             "heatmap_y", 
             "Select Y-axis Variable:",
             choices = c(
-              "Douglas Category" = "douglas_category",
-              "Beaufort Category" = "beaufort_category",
-              "Oktas Category" = "oktas_category",
+              "Douglas category" = "douglas_category",
+              "Beaufort category" = "beaufort_category",
+              "Oktas category" = "oktas_category",
               "Season" = "season",
-              "Safety Label" = "safety_label",
-              "Precipitation Type" = "precipitation_type",
+              "Safety label" = "safety_label",
+              "Precipitation type" = "precipitation_type",
               "Total totals index" = "total_index_category",
               "K-index" = "k_index_category"
             ),
@@ -511,9 +512,9 @@ ui <- navbarPage(
               "Max individual wave height [m]" = "max_individual_wave_height",
               "Peak wave period [s]" = "peak_wave_period",
               "Significant height of wind waves [m]" = "significant_height_of_wind_waves",
-              "Mean sea level pressure [hPa]" = "mean_sea_level_pressure",
+              "Mean sea level pressure [Pa]" = "mean_sea_level_pressure",
               "Sea surface temperature [°C]" = "sea_surface_temperature",
-              "Surface pressure [hPa]" = "surface_pressure",
+              "Surface pressure [Pa]" = "surface_pressure",
               "Max wind gust [m/s]" = "max_wind_gust",
               "Instantaneous wind gust [m/s]" = "instantaneous_wind_gust",
               "Low cloud cover [%]" = "low_cloud_cover",
@@ -1008,7 +1009,7 @@ server <- function(input, output, session) {
     atmos_forecast_results() |>
       ggplot(aes(x = time, y = predicted_wind_speed)) +
       geom_line(color = "blue") +
-      geom_smooth(se = FALSE, color = "red") +
+      geom_smooth(se = FALSE, color = "orange", size = 1.5) +
       labs(
         x = "Time", 
         y = "Wind Speed [m/s]",
@@ -1627,7 +1628,7 @@ server <- function(input, output, session) {
     route_forecast_results() |>
       ggplot(aes(x = time, y = predicted_wind_speed)) +
       geom_line(color = "blue") +
-      geom_smooth(se = FALSE, color = "red") +
+      geom_smooth(se = FALSE, color = "orange", size = 1.5) +
       labs(
         x = "Time", 
         y = "Wind speed [m/s]",
@@ -1642,7 +1643,7 @@ server <- function(input, output, session) {
     
     route_forecast_results() |>
       ggplot(aes(x = time, y = predicted_significant_height_combined_waves_swell)) +
-      geom_line(color = "darkgreen") +
+      geom_line(color = "lightblue") +
       geom_smooth(se = FALSE, color = "orange") +
       labs(
         x = "Time",
@@ -1950,9 +1951,17 @@ server <- function(input, output, session) {
       theme_minimal() +
       scale_fill_brewer(palette = "Set3") +
       labs(
-        title = "Violin Plot",
-        x = "Category",
-        y = "Value"
+        title = paste(
+          "Distribution of", input$violin_y, 
+          "across", input$violin_x
+        ),
+        x = input$violin_x,  # Use the actual variable name for the X-axis
+        y = input$violin_y   # Use the actual variable name for the Y-axis
+      ) +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 10),  # Rotate and adjust text size
+        axis.title.x = element_text(size = 12, face = "bold"),         # Adjust X-axis title
+        axis.title.y = element_text(size = 12, face = "bold")          # Adjust Y-axis title
       )
   })
 }
