@@ -20,8 +20,13 @@ The primary dataset used in this project is from the [Copernicus Climate Data St
   Predicts the safety of a user-defined sailing route based on weather conditions like wind speed and wave height.
 
 - **Weather Forecasts**  
-  Uses Weighted Moving Average (WMA) techniques to forecast weather conditions.
+  Uses Holt-Winters seasonal method and Arnaud Legoux moving average techniques to forecast weather conditions.
 
 - **Interactive R Shiny Application**  
   - Allows users to select start and end points for a sailing journey.  
   - Visualizes safety recommendations and weather forecasts along the route.
+
+## User Guide
+
+- **Visualization**
+  You can view interactive safety maps that categorize the route into Safe, Risky, or Unsafe segments.

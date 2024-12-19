@@ -9,6 +9,7 @@ library(geosphere)
 library(sp)
 library(tidyverse)
 library(shinyjs)
+library(shinyWidgets)
 library(DT)
 library(ggiraph)
 
@@ -30,34 +31,43 @@ ui <- navbarPage(
       sidebarPanel(
         useShinyjs(),
         h3("Route Selection"),
-        radioButtons(
+        awesomeRadio(
           "point_type", 
           "Point Type:",
           choices = c("Start", "Via", "End"),
-          inline = TRUE
+          selected = "Start",
+          inline = TRUE,
+          status = "primary"
         ),
         actionButton("atmos_add_point", "Add Point", icon = icon("map-marker-alt")),
         actionButton("atmos_clear_route", "Clear Route", icon = icon("trash-alt")),
         actionButton("atmos_plot_route", "Plot Route", icon = icon("route")),
         actionButton("atmos_save_points", "Save Route Points", icon = icon("save")),
         
-        hr(),
+        br(),
         
         h3("Prediction Settings"),
-        selectInput(
+        pickerInput(
           "atmos_variable_group", 
           "Variables to Predict:",
           choices = list(
             "Basic Variables (Safety-Related)" = "basic",
             "All Atmospheric Variables" = "all_atmos"
           ),
-          selected = "basic"
+          selected = "basic",
+          multiple = FALSE,
+          options = pickerOptions(
+            style = "btn-primary",
+            liveSearch = TRUE
+          )
         ),
-        selectInput(
+        awesomeRadio(
           "atmos_sailor_experience", 
           "Sailor Experience Level:",
           choices = c("Beginner" = "beginner", "Intermediate/Advanced" = "advanced"),
-          selected = "beginner"
+          selected = "beginner",
+          inline = TRUE,
+          status = "success"
         ),
         dateRangeInput(
           "prediction_date_range", 
@@ -70,14 +80,13 @@ ui <- navbarPage(
         actionButton("atmos_predict", "Run Prediction", icon = icon("chart-line")),
         actionButton("atmos_clear_all", "Clear Everything", icon = icon("broom")),
         
-        # Info text about saving the route
         div(
           id = "atmos_prediction_warning",
           style = "color: red; font-weight: bold;",
           "Please save the route before running predictions."
         ),
         
-        hr(),
+        br(),
         
         h3("Visualization Settings"),
         dateInput(
@@ -85,42 +94,54 @@ ui <- navbarPage(
           "Select Date for Visualization:",
           value = Sys.Date()
         ),
-        selectInput(
+        pickerInput(
           "selected_time", 
           "Select Time for Visualization (Optional):",
           choices = c("All Day" = "all_day", "06:00 UTC" = "06:00:00", 
                       "12:00 UTC" = "12:00:00", "18:00 UTC" = "18:00:00"),
-          selected = "all_day"
+          selected = "all_day",
+          options = pickerOptions(
+            style = "btn-success"
+          )
         ),
         actionButton("change_visualization", "Visualize", icon = icon("sync")),
         
-        hr(),
+        br(),
         
         h3("Interactive Visualization"),
         conditionalPanel(
           condition = "input.atmos_variable_group == 'all_atmos'",
-          checkboxInput("show_interactive_plot", "Show Interactive Plot", value = TRUE),
-          selectInput(
+          materialSwitch(
+            "show_interactive_plot",
+            "Show Interactive Plot",
+            value = TRUE,
+            status = "info"
+          ),
+          pickerInput(
             "selected_variable",
             "Select Variable to Display:",
             choices = c(
-              "Wind Speed [m/s]" = "predicted_wind_speed",
-              "Mean Sea Level Pressure [hPa]" = "predicted_mean_sea_level_pressure",
-              "Sea Surface Temperature [°C]" = "predicted_sea_surface_temperature",
-              "Surface Pressure" = "predicted_surface_pressure",
-              "Max Wind Gust [m/s]" = "predicted_max_wind_gust",
-              "Instantaneous Wind Gust [m/s]" = "predicted_instantaneous_wind_gust",
-              "Low Cloud Cover" = "predicted_low_cloud_cover",
-              "Total Cloud Cover" = "predicted_total_cloud_cover",
-              "Precipitation Type" = "predicted_precipitation_type",
-              "Convective Available Potential Energy" = "predicted_convective_available_potential_energy",
-              "Sea Ice Concentration" = "predicted_sea_ice_concentration"
+              "Wind speed [m/s]" = "predicted_wind_speed",
+              "Mean sea level pressure [hPa]" = "predicted_mean_sea_level_pressure",
+              "Sea surface temperature [°C]" = "predicted_sea_surface_temperature",
+              "Surface pressure [hPa]" = "predicted_surface_pressure",
+              "Max wind gust [m/s]" = "predicted_max_wind_gust",
+              "Instantaneous wind gust [m/s]" = "predicted_instantaneous_wind_gust",
+              "Low cloud cover [%]" = "predicted_low_cloud_cover",
+              "Total cloud cover [%]" = "predicted_total_cloud_cover",
+              "Precipitation type" = "predicted_precipitation_type",
+              "Convective available potential energy" = "predicted_convective_available_potential_energy",
+              "Sea ice concentration" = "predicted_sea_ice_concentration"
             ),
-            selected = "predicted_wind_speed"
+            selected = "predicted_wind_speed",
+            options = pickerOptions(
+              style = "btn-info",
+              liveSearch = TRUE
+            )
           )
         ),
         
-        hr(),
+        br(),
         
         h3("Messages"),
         verbatimTextOutput("atmos_saved_message")
@@ -175,34 +196,43 @@ ui <- navbarPage(
       sidebarPanel(
         useShinyjs(),
         h3("Route Selection"),
-        radioButtons(
+        awesomeRadio(
           "route_point_type",  # Unique ID
           "Point Type:",
           choices = c("Start", "Via", "End"),
-          inline = TRUE
+          selected = "Start",
+          inline = TRUE,
+          status = "primary"
         ),
         actionButton("route_add_point", "Add Point", icon = icon("map-marker-alt")),
         actionButton("route_clear_route", "Clear Route", icon = icon("trash-alt")),
         actionButton("route_plot_route", "Plot Route", icon = icon("route")),
         actionButton("route_save_points", "Save Route Points", icon = icon("save")),
         
-        hr(),
+        br(),
         
         h3("Prediction Settings"),
-        selectInput(
+        pickerInput(
           "route_variable_group",  # Unique ID
           "Variables to Predict:",
           choices = list(
-            "Basic variables (safety-related only)" = "basic",
-            "Extended variables (all)" = "extended"
+            "Basic Variables (Safety-Related)" = "basic",
+            "Extended Variables (All)" = "extended"
           ),
-          selected = "basic"
+          selected = "basic",
+          multiple = FALSE,
+          options = pickerOptions(
+            style = "btn-primary",
+            liveSearch = TRUE
+          )
         ),
-        selectInput(
+        awesomeRadio(
           "route_sailor_experience", 
           "Sailor Experience Level:",
           choices = c("Beginner" = "beginner", "Intermediate/Advanced" = "advanced"),
-          selected = "beginner"
+          selected = "beginner",
+          inline = TRUE,
+          status = "success"
         ),
         dateRangeInput(
           "route_prediction_date_range",  # Unique ID
@@ -215,14 +245,13 @@ ui <- navbarPage(
         actionButton("route_start_prediction", "Run Prediction", icon = icon("chart-line")),
         actionButton("route_clear_all", "Clear Everything", icon = icon("broom")),
         
-        # Info text about saving the route
         div(
           id = "route_prediction_warning",
           style = "color: red; font-weight: bold;",
           "Please save the route before running predictions."
         ),
         
-        hr(),
+        br(),
         
         h3("Visualization Settings"),
         dateInput(
@@ -230,52 +259,64 @@ ui <- navbarPage(
           "Select Date for Visualization:",
           value = Sys.Date()
         ),
-        selectInput(
+        pickerInput(
           "route_selected_time",  # Unique ID
           "Select Time for Visualization (Optional):",
           choices = c("All Day" = "all_day", "06:00 UTC" = "06:00:00", 
                       "12:00 UTC" = "12:00:00", "18:00 UTC" = "18:00:00"),
-          selected = "all_day"
+          selected = "all_day",
+          options = pickerOptions(
+            style = "btn-success"
+          )
         ),
         actionButton("route_change_visualization", "Visualize", icon = icon("sync")),
         
-        hr(),
+        br(),
         
         h3("Interactive Visualization"),
         conditionalPanel(
           condition = "input.route_variable_group == 'extended'",
-          checkboxInput("route_show_interactive_plot", "Show Interactive Plot", value = TRUE),
-          selectInput(
+          materialSwitch(
+            "route_show_interactive_plot",
+            "Show Interactive Plot",
+            value = TRUE,
+            status = "info"
+          ),
+          pickerInput(
             "route_selected_variable",
             "Select Variable to Display:",
             choices = c(
-              "Wind Gust Factor" = "predicted_wind_gust_factor",
-              "Wind Speed [m/s]" = "predicted_wind_speed",
-              "Mean Wave Direction [°]" = "predicted_mean_wave_direction",
-              "Mean Wave Period [s]" = "predicted_mean_wave_period",
-              "Significant Height of Combined Waves and Swell [m]" = "predicted_significant_height_combined_waves_swell",
-              "Max Individual Wave Height [m]" = "predicted_max_individual_wave_height",
-              "Peak Wave Period [s]" = "predicted_peak_wave_period",
-              "Significant Height of Wind Waves [m]" = "predicted_significant_height_of_wind_waves",
-              "Mean Sea Level Pressure [hPa]" = "predicted_mean_sea_level_pressure",
-              "Sea Surface Temperature [°C]" = "predicted_sea_surface_temperature",
-              "Surface Pressure [hPa]" = "predicted_surface_pressure",
-              "Max Wind Gust [m/s]" = "predicted_max_wind_gust",
-              "Instantaneous Wind Gust [m/s]" = "predicted_instantaneous_wind_gust",
-              "Low Cloud Cover [%]" = "predicted_low_cloud_cover",
-              "Total Cloud Cover [%]" = "predicted_total_cloud_cover",
-              "Convective Available Potential Energy [J/kg]" = "predicted_convective_available_potential_energy",
-              "Sea Ice Concentration [0-1]" = "predicted_sea_ice_concentration",
-              "Wind Direction [°]" = "predicted_wind_direction",
-              "K Index" = "predicted_k_index",
-              "Total Totals Index" = "predicted_total_totals_index",
+              "Wind gust factor" = "predicted_wind_gust_factor",
+              "Wind speed [m/s]" = "predicted_wind_speed",
+              "Mean wave direction [°]" = "predicted_mean_wave_direction",
+              "Mean wave period [s]" = "predicted_mean_wave_period",
+              "Significant height of combined waves and swell [m]" = "predicted_significant_height_combined_waves_swell",
+              "Max individual wave height [m]" = "predicted_max_individual_wave_height",
+              "Peak wave period [s]" = "predicted_peak_wave_period",
+              "Significant height of wind waves [m]" = "predicted_significant_height_of_wind_waves",
+              "Mean sea level pressure [hPa]" = "predicted_mean_sea_level_pressure",
+              "Sea surface temperature [°C]" = "predicted_sea_surface_temperature",
+              "Surface pressure [hPa]" = "predicted_surface_pressure",
+              "Max wind gust [m/s]" = "predicted_max_wind_gust",
+              "Instantaneous wind gust [m/s]" = "predicted_instantaneous_wind_gust",
+              "Low cloud cover [%]" = "predicted_low_cloud_cover",
+              "Total cloud cover [%]" = "predicted_total_cloud_cover",
+              "Convective available potential energy [J/kg]" = "predicted_convective_available_potential_energy",
+              "Sea ice concentration [0-1]" = "predicted_sea_ice_concentration",
+              "Wind direction [°]" = "predicted_wind_direction",
+              "K-index" = "predicted_k_index",
+              "Total totals index" = "predicted_total_totals_index",
               "Wavelength [m]" = "predicted_wavelength"
             ),
-            selected = "predicted_wind_speed"
+            selected = "predicted_wind_speed",
+            options = pickerOptions(
+              style = "btn-info",
+              liveSearch = TRUE
+            )
           )
         ),
         
-        hr(),
+        br(),
         
         h3("Messages"),
         verbatimTextOutput("route_saved_message")
@@ -284,22 +325,22 @@ ui <- navbarPage(
         h3("Route Map"),
         leafletOutput("route_map", height = "600px"),
         
-        hr(),
+        br(),
         
         h3("Route Points Table"),
         DTOutput("route_table"),
         
-        hr(),
+        br(),
         
         h3("Safety Map"),
         plotOutput("safety_map", height = "800px", width = "1200px"),
         
-        hr(),
+        br(),
         
         h3("Interactive Map"),
         girafeOutput("route_interactive_map", height = "800px", width = "1200px"),
         
-        hr(),
+        br(),
         
         conditionalPanel(
           condition = "input.route_variable_group == 'extended' && input.route_show_interactive_plot == true",
@@ -307,12 +348,12 @@ ui <- navbarPage(
           plotOutput("route_interactive_plot", height = "600px", width = "800px")
         ),
         
-        hr(),
+        br(),
         
         h3("Prediction Results"),
         DTOutput("route_prediction_table"),
         
-        hr(),
+        br(),
         
         div(id = "route_additional_plots", style = "display: none;",
             h3("Variables Insights"),
@@ -339,102 +380,130 @@ ui <- navbarPage(
             target = "_blank"),
           ". Select variables and time ranges below to visualize historical trends."
         ),
-        hr(),
-        selectInput("plot_var", "Select Variable to Plot:",
-                    choices = c("Wind speed" = "wind_speed",
-                                "Wind gust factor" = "wind_gust_factor",
-                                "Wave height" = "significant_height_combined_waves_swell",
-                                "Mean wave period" = "mean_wave_period",
-                                "Max individual wave height" = "max_individual_wave_height",
-                                "Peak wave period" = "peak_wave_period",
-                                "Sea surface temperature" = "sea_surface_temperature")),
-        sliderInput("time_range", "Time Range:",
-                    min = as.Date("2012-01-01"),
-                    max = as.Date("2013-12-31"),
-                    value = c(as.Date("2012-01-01"), as.Date("2013-12-31")),
-                    timeFormat = "%Y-%m-%d"),
-        hr(),
-        checkboxInput("show_heatmap", "Show Interactive Heatmap", value = FALSE),
+        br(),
         
-        # Conditional dropdowns for X and Y axis variables
+        pickerInput(
+          "plot_var", 
+          "Select Variable to Plot:",
+          choices = c(
+            "Wind gust factor" = "wind_gust_factor",
+            "Wind speed [m/s]" = "wind_speed",
+            "Mean wave direction [°]" = "mean_wave_direction",
+            "Mean wave period [s]" = "mean_wave_period",
+            "Significant height of combined waves and swell [m]" = "significant_height_combined_waves_swell",
+            "Max individual wave height [m]" = "max_individual_wave_height",
+            "Peak wave period [s]" = "peak_wave_period",
+            "Significant height of wind waves [m]" = "significant_height_of_wind_waves",
+            "Mean sea level pressure [hPa]" = "mean_sea_level_pressure",
+            "Sea surface temperature [°C]" = "sea_surface_temperature",
+            "Surface pressure [hPa]" = "surface_pressure",
+            "Max wind gust [m/s]" = "max_wind_gust",
+            "Instantaneous wind gust [m/s]" = "instantaneous_wind_gust",
+            "Low cloud cover [%]" = "low_cloud_cover",
+            "Total cloud cover [%]" = "total_cloud_cover",
+            "Convective available potential energy [J/kg]" = "convective_available_potential_energy",
+            "Sea ice concentration [0-1]" = "sea_ice_concentration",
+            "Wind direction [°]" = "wind_direction",
+            "K-index" = "k_index",
+            "Total totals index" = "total_totals_index",
+            "Wavelength [m]" = "wavelength"
+          ),
+          selected = "wind_speed",
+          options = pickerOptions(
+            style = "btn-primary",
+            liveSearch = TRUE
+          )
+        ),
+        
+        sliderInput(
+          "time_range", 
+          "Time Range:",
+          min = as.Date("2012-01-01"),
+          max = as.Date("2013-12-31"),
+          value = c(as.Date("2012-01-01"), as.Date("2013-12-31")),
+          timeFormat = "%Y-%m-%d"
+        ),
+        br(),
+        
+        materialSwitch(
+          "show_heatmap", 
+          "Show Interactive Heatmap",
+          value = FALSE,
+          status = "info"
+        ),
+        
         conditionalPanel(
           condition = "input.show_heatmap == true",
-          selectInput("heatmap_x", "Select X-axis Variable:",
-                      choices = c("Beaufort Category" = "beaufort_category",
-                                  "Douglas Category" = "douglas_category",
-                                  "Oktas Category" = "oktas_category",
-                                  "Season" = "season",
-                                  "Safety Label" = "safety_label",
-                                  "Precipitation Type" = "precipitation_type")),
-          selectInput("heatmap_y", "Select Y-axis Variable:",
-                      choices = c("Douglas Category" = "douglas_category",
-                                  "Beaufort Category" = "beaufort_category",
-                                  "Oktas Category" = "oktas_category",
-                                  "Season" = "season",
-                                  "Safety Label" = "safety_label",
-                                  "Precipitation Type" = "precipitation_type"))
+          pickerInput(
+            "heatmap_x", 
+            "Select X-axis Variable:",
+            choices = c(
+              "Beaufort Category" = "beaufort_category",
+              "Douglas Category" = "douglas_category",
+              "Oktas Category" = "oktas_category",
+              "Season" = "season",
+              "Safety Label" = "safety_label",
+              "Precipitation Type" = "precipitation_type"
+            ),
+            options = pickerOptions(
+              style = "btn-success",
+              liveSearch = TRUE
+            )
+          ),
+          pickerInput(
+            "heatmap_y", 
+            "Select Y-axis Variable:",
+            choices = c(
+              "Douglas Category" = "douglas_category",
+              "Beaufort Category" = "beaufort_category",
+              "Oktas Category" = "oktas_category",
+              "Season" = "season",
+              "Safety Label" = "safety_label",
+              "Precipitation Type" = "precipitation_type"
+            ),
+            options = pickerOptions(
+              style = "btn-success",
+              liveSearch = TRUE
+            )
+          )
         )
       ),
       mainPanel(
         h3("Variable Trends"),
         plotOutput("plot_output"),
+        
         hr(),
+        
         h4("Summary Statistics"),
         verbatimTextOutput("plot_summary"),
+        
         hr(),
+        
         conditionalPanel(
           condition = "input.show_heatmap == true",
           h4("Interactive Heatmap"),
           plotOutput("heatmap_output", height = "600px", width = "800px")
         ),
-        hr(),
-        h4("Saved Historical Plots"),
-        p("Below are the pre-generated plots from the historical analysis:"),
         
-        # Adjust the layout for centering and enlarging images
+        hr(),
+        
+        h4("Saved Historical Plots"),
+        p("Below are the pre-generated plots from the exploratory
+          data analysis of historical data:"),
+        
+        # Adjust layout for saved plots
         fluidRow(
-          column(8, offset = 2,  # Center column (offset = 2 moves it to the center)
-                 img(src = "2_plots_max_wave_height_and_others.png", height = "400px", width = "100%"))
-        ),
-        fluidRow(
-          column(8, offset = 2,
-                 img(src = "air_density_vs_sea_surface_temp.png", height = "400px", width = "100%"))
-        ),
-        fluidRow(
-          column(8, offset = 2,
-                 img(src = "mean_wave_period_by_douglas.png", height = "400px", width = "100%"))
-        ),
-        fluidRow(
-          column(8, offset = 2,
-                 img(src = "sea_surface_temp_by_precipitation_type.png", height = "400px", width = "100%"))
-        ),
-        fluidRow(
-          column(8, offset = 2,
-                 img(src = "sea_surface_temperature_over_time.png", height = "400px", width = "100%"))
-        ),
-        fluidRow(
-          column(8, offset = 2,
-                 img(src = "surface_pressure_and_wind_gust_by_beaufort.png", height = "400px", width = "100%"))
-        ),
-        fluidRow(
-          column(8, offset = 2,
-                 img(src = "time_max_wave_height.png", height = "400px", width = "100%"))
-        ),
-        fluidRow(
-          column(8, offset = 2,
-                 img(src = "wave_height_over_time.png", height = "400px", width = "100%"))
-        ),
-        fluidRow(
-          column(8, offset = 2,
-                 img(src = "wavelength_to_wind_speed.png", height = "400px", width = "100%"))
-        ),
-        fluidRow(
-          column(8, offset = 2,
-                 img(src = "wind_speed_to_max_wave_height_by_oktas.png", height = "400px", width = "100%"))
-        ),
-        fluidRow(
-          column(8, offset = 2,
-                 img(src = "windrose.png", height = "400px", width = "100%"))
+          column(8, offset = 2, img(src = "2_plots_max_wave_height_and_others.png", height = "400px", width = "100%")),
+          column(8, offset = 2, img(src = "air_density_vs_sea_surface_temp.png", height = "400px", width = "100%")),
+          column(8, offset = 2, img(src = "mean_wave_period_by_douglas.png", height = "400px", width = "100%")),
+          column(8, offset = 2, img(src = "sea_surface_temp_by_precipitation_type.png", height = "400px", width = "100%")),
+          column(8, offset = 2, img(src = "sea_surface_temperature_over_time.png", height = "400px", width = "100%")),
+          column(8, offset = 2, img(src = "surface_pressure_and_wind_gust_by_beaufort.png", height = "400px", width = "100%")),
+          column(8, offset = 2, img(src = "time_max_wave_height.png", height = "400px", width = "100%")),
+          column(8, offset = 2, img(src = "wave_height_over_time.png", height = "400px", width = "100%")),
+          column(8, offset = 2, img(src = "wavelength_to_wind_speed.png", height = "400px", width = "100%")),
+          column(8, offset = 2, img(src = "wind_speed_to_max_wave_height_by_oktas.png", height = "400px", width = "100%")),
+          column(8, offset = 2, img(src = "windrose.png", height = "400px", width = "100%"))
         )
       )
     )
@@ -662,8 +731,8 @@ server <- function(input, output, session) {
         if (var_name %in% c("low_cloud_cover", "total_cloud_cover")) {
           # Use EMA for cloud variables
           future_forecast <- tryCatch({
-            ema_forecast <- EMA(ts_data, ratio = 0.2, wilder = TRUE)  # Adjust ratio as needed
-            rep(tail(ema_forecast, 1), future_length)  # Repeat the last EMA value for the forecast length
+            alma_forecast <- ALMA(ts_data, n = 21, offset = 0.8, sigma = 10)  # Adjust parameters as needed
+            rep(tail(alma_forecast, 1), future_length)
           }, error = function(e) {
             message(sprintf("EMA failed for %s: %s", var_name, e$message))
             rep(NA, future_length)
@@ -1036,11 +1105,12 @@ server <- function(input, output, session) {
     # Generate the interactive plot
     processed_data |>
       ggplot(aes(x = time, y = .data[[variable_to_plot]])) +
-      geom_line(size = 1, color = "blue") +
+      geom_line(color = "coral") +
+      geom_smooth() +
       labs(
         x = "Time",
         y = variable_to_plot,
-        title = paste("Predicted", variable_to_plot, "over time")
+        title = paste(variable_to_plot, "over time")
       ) +
       scale_color_paletteer_c("ggthemes::Blue-Teal", name = "Variable") +
       theme_minimal() +
@@ -1683,7 +1753,7 @@ server <- function(input, output, session) {
       labs(
         x = "Time",
         y = variable_to_plot,
-        title = paste(variable_to_plot, " over time")
+        title = paste(variable_to_plot, "over time")
       ) +
       scale_color_paletteer_c("ggthemes::Blue-Teal", name = "Variable") +
       theme_minimal() +
@@ -1715,6 +1785,46 @@ server <- function(input, output, session) {
         axis.title.x = element_text(size = 12),
         axis.title.y = element_text(size = 12)
       )
+  })
+  
+  # Calculate and render summary statistics
+  output$plot_summary <- renderText({
+    data <- filtered_data()
+    
+    # Check if the selected variable exists in the data
+    if (!(input$plot_var %in% names(data))) {
+      return("Selected variable not found in the data.")
+    }
+    
+    var_data <- data[[input$plot_var]]
+    
+    # Remove NAs
+    var_data <- var_data[!is.na(var_data)]
+    
+    # Check if there is data to summarize
+    if (length(var_data) == 0) {
+      return("No data available for the selected variable and time range.")
+    }
+    
+    # Calculate summary statistics
+    mean_val <- mean(var_data)
+    median_val <- median(var_data)
+    min_val <- min(var_data)
+    max_val <- max(var_data)
+    sd_val <- sd(var_data)
+    
+    # Create summary string
+    summary_text <- paste0(
+      "Summary Statistics for ", gsub("_", " ", input$plot_var, fixed = TRUE), ":\n",
+      "---------------------------------------\n",
+      "Mean: ", round(mean_val, 2), "\n",
+      "Median: ", round(median_val, 2), "\n",
+      "Minimum: ", round(min_val, 2), "\n",
+      "Maximum: ", round(max_val, 2), "\n",
+      "Standard Deviation: ", round(sd_val, 2)
+    )
+    
+    return(summary_text)
   })
   
   # Heatmap
