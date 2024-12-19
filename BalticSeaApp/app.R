@@ -438,12 +438,14 @@ ui <- navbarPage(
             "heatmap_x", 
             "Select X-axis Variable:",
             choices = c(
-              "Beaufort Category" = "beaufort_category",
-              "Douglas Category" = "douglas_category",
-              "Oktas Category" = "oktas_category",
+              "Beaufort category" = "beaufort_category",
+              "Douglas category" = "douglas_category",
+              "Oktas category" = "oktas_category",
               "Season" = "season",
-              "Safety Label" = "safety_label",
-              "Precipitation Type" = "precipitation_type"
+              "Safety label" = "safety_label",
+              "Precipitation type" = "precipitation_type",
+              "Total totals index" = "total_index_category",
+              "K-index" = "k_index_category"
             ),
             options = pickerOptions(
               style = "btn-success",
@@ -459,10 +461,73 @@ ui <- navbarPage(
               "Oktas Category" = "oktas_category",
               "Season" = "season",
               "Safety Label" = "safety_label",
-              "Precipitation Type" = "precipitation_type"
+              "Precipitation Type" = "precipitation_type",
+              "Total totals index" = "total_index_category",
+              "K-index" = "k_index_category"
             ),
             options = pickerOptions(
               style = "btn-success",
+              liveSearch = TRUE
+            )
+          )
+        ),
+        
+        materialSwitch(
+          "show_violin_plot", 
+          "Show Violin Plot",
+          value = FALSE,
+          status = "info"
+        ),
+        
+        conditionalPanel(
+          condition = "input.show_violin_plot == true",
+          pickerInput(
+            "violin_x", 
+            "Select X-axis Variable (Category):",
+            choices = c(
+              "Beaufort category" = "beaufort_category",
+              "Douglas category" = "douglas_category",
+              "Oktas category" = "oktas_category",
+              "Season" = "season",
+              "Safety label" = "safety_label",
+              "Precipitation type" = "precipitation_type",
+              "Total totals index" = "total_index_category",
+              "K-index" = "k_index_category"
+            ),
+            options = pickerOptions(
+              style = "btn-success",
+              liveSearch = TRUE
+            )
+          ),
+          pickerInput(
+            "violin_y", 
+            "Select Y-axis Variable (Numeric):",
+            choices = c(
+              "Wind gust factor" = "wind_gust_factor",
+              "Wind speed [m/s]" = "wind_speed",
+              "Mean wave direction [°]" = "mean_wave_direction",
+              "Mean wave period [s]" = "mean_wave_period",
+              "Significant height of combined waves and swell [m]" = "significant_height_combined_waves_swell",
+              "Max individual wave height [m]" = "max_individual_wave_height",
+              "Peak wave period [s]" = "peak_wave_period",
+              "Significant height of wind waves [m]" = "significant_height_of_wind_waves",
+              "Mean sea level pressure [hPa]" = "mean_sea_level_pressure",
+              "Sea surface temperature [°C]" = "sea_surface_temperature",
+              "Surface pressure [hPa]" = "surface_pressure",
+              "Max wind gust [m/s]" = "max_wind_gust",
+              "Instantaneous wind gust [m/s]" = "instantaneous_wind_gust",
+              "Low cloud cover [%]" = "low_cloud_cover",
+              "Total cloud cover [%]" = "total_cloud_cover",
+              "Convective available potential energy [J/kg]" = "convective_available_potential_energy",
+              "Sea ice concentration [0-1]" = "sea_ice_concentration",
+              "Wind direction [°]" = "wind_direction",
+              "K-index" = "k_index",
+              "Total totals index" = "total_totals_index",
+              "Wavelength [m]" = "wavelength"
+            ),
+            selected = "wind_speed",
+            options = pickerOptions(
+              style = "btn-primary",
               liveSearch = TRUE
             )
           )
@@ -486,6 +551,12 @@ ui <- navbarPage(
         ),
         
         hr(),
+        
+        conditionalPanel(
+          condition = "input.show_violin_plot == true",
+          h4("Violin Plot"),
+          plotOutput("violin_plot", height = "600px", width = "800px")
+        ),
         
         h4("Saved Historical Plots"),
         p("Below are the pre-generated plots from the exploratory
@@ -515,6 +586,7 @@ library(TTR)
 library(paletteer)
 library(forecast)
 library(stats)
+library(ggstatsplot)
 
 # Use in a ggplot2 chart:
 scale_colour_paletteer_d("ggsci::light_blue_material")
@@ -1861,6 +1933,27 @@ server <- function(input, output, session) {
           axis.text = element_text(size = 14)
         )
     })
+  })
+  
+  # Violin plot
+  output$violin_plot <- renderPlot({
+    req(input$violin_x, input$violin_y, filtered_data())
+    
+    # Prepare the data
+    filtered_data() |>
+      select(
+        category = !!sym(input$violin_x),
+        value = !!sym(input$violin_y)
+      ) |>
+      ggplot(aes(x = category, y = value, fill = category)) +
+      geom_violin(alpha = 0.8) +
+      theme_minimal() +
+      scale_fill_brewer(palette = "Set3") +
+      labs(
+        title = "Violin Plot",
+        x = "Category",
+        y = "Value"
+      )
   })
 }
 
