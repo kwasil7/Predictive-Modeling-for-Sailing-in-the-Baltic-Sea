@@ -579,6 +579,22 @@ ui <- navbarPage(
         )
       )
     )
+  ),
+  
+  # Separate panel for downloading the report
+  tabPanel(
+    "Download Report",
+    sidebarLayout(
+      sidebarPanel(
+        h4("Download Pre-written Report"),
+        p("Click the button below to download the pre-written report in PDF format."),
+        downloadButton("download_report", "Download PDF")
+      ),
+      mainPanel(
+        h4("About the Report"),
+        p("This is a pre-written report that contains a summary of the analysis and insights.")
+      )
+    )
   )
 )
 
@@ -1966,6 +1982,23 @@ server <- function(input, output, session) {
         legend.text = element_text(size = 12) 
       )
   })
+  
+
+# Download the thesis report ----------------------------------------------
+
+  output$download_report <- downloadHandler(
+    filename = function() {
+      "report.pdf"  # The name of the file the user will download
+    },
+    content = function(file) {
+      # Google Drive direct link for exporting the Google Doc as a PDF
+      doc_link <- "https://docs.google.com/document/d/1SMbbhp9OPY2cW_8Jpb9VrC_2hU1QeSoIgbnKxrJ3CF0/export?format=pdf"
+      
+      # Download the file using httr
+      httr::GET(url = doc_link, httr::write_disk(file, overwrite = TRUE))
+    }
+  )
+  
 }
 
 # Run the App
