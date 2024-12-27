@@ -1985,11 +1985,11 @@ server <- function(input, output, session) {
 
   output$download_report <- downloadHandler(
     filename = function() {
-      "report.pdf"  # The name of the file the user will download
+      "Thesis Report.pdf"  # The name of the file the user will download
     },
     content = function(file) {
       # Google Drive direct link for exporting the Google Doc as a PDF
-      doc_link <- "https://docs.google.com/document/d/1SMbbhp9OPY2cW_8Jpb9VrC_2hU1QeSoIgbnKxrJ3CF0/export?format=pdf"
+      doc_link <- "https://drive.google.com/uc?export=download&id=1SkZsUZzP0UwnnVjCBqLb1wx2ywmSHjzN"
       
       # Download the file using httr
       httr::GET(url = doc_link, httr::write_disk(file, overwrite = TRUE))
