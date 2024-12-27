@@ -1015,6 +1015,7 @@ library(sp)
 library(zoo)
 library(paletteer)
 library(lubridate)
+library(stats)
 
 baltic_data_model <- read_rds("../baltic_data_model.rds")
 
@@ -1254,6 +1255,154 @@ ggplot(comparison, aes(x = actual, y = predicted)) +
     title = "Predicted vs. Actual Wind Speeds (January 2013)",
     x = "Actual Wind Speed",
     y = "Predicted Wind Speed"
+  ) +
+  theme_minimal()
+
+
+# Holt-Winters seasonal method evaluation ---------------------------------
+
+# Filter data 
+training_data <- baltic_data_model |>
+  filter(year(time) >= 2012 & year(time) < 2014)
+
+# Identify numeric variables for forecasting
+numeric_vars <- names(training_data)[sapply(training_data, is.numeric)]
+numeric_vars <- setdiff(numeric_vars, c("latitude", "longitude"))
+
+# Group by latitude and longitude
+grouped_data <- training_data |>
+  group_by(latitude, longitude) |>
+  group_split()
+
+# Define forecast horizon: 31 days * 3 observations per day
+future_length <- 31 * 3
+
+# Generate future timestamps for January 2013
+future_dates <- seq.Date(
+  from = as.Date("2013-01-01"),
+  to = as.Date("2013-01-31"),
+  by = "day"
+)
+
+future_times <- as.POSIXct(
+  paste(
+    rep(future_dates, each = 3),
+    rep(c("06:00:00", "12:00:00", "18:00:00"), times = length(future_dates))
+  ),
+  tz = "UTC"
+)
+
+# Initialize an empty list to store results
+results <- list()
+
+# Loop through each location
+for (i in seq_along(grouped_data)) {
+  loc_data <- grouped_data[[i]] |>
+    arrange(time)
+  
+  # Initialize a list to store forecasts for numeric variables
+  forecast_list <- list()
+  
+  for (v in seq_along(numeric_vars)) {
+    var_name <- numeric_vars[v]
+    
+    # Extract and interpolate the time series data for the current variable
+    ts_data <- loc_data |> 
+      pull(var_name) |> 
+      na.approx(rule = 2)  # Interpolate missing values
+    
+    if (length(ts_data) < 2) {
+      # Not enough data to perform forecasting
+      forecast_list[[v]] <- tibble(!!paste0("predicted_", var_name) := rep(NA, future_length))
+      next
+    }
+    
+    # Attempt to apply Holt-Winters Seasonal Model
+    ts_obj <- ts(ts_data, frequency = 1095)  # Adjust frequency for annual seasonality
+    hw_model <- tryCatch({
+      HoltWinters(ts_obj)
+    }, error = function(e) {
+      message(sprintf("Holt-Winters failed for %s: %s", var_name, e$message))
+      NULL
+    })
+    
+    if (is.null(hw_model)) {
+      forecast_list[[v]] <- tibble(!!paste0("predicted_", var_name) := rep(NA, future_length))
+      next
+    }
+    
+    # Generate forecasts for the future period
+    future_forecast <- tryCatch({
+      predict(hw_model, n.ahead = future_length)
+    }, error = function(e) {
+      message(sprintf("Forecasting failed for %s: %s", var_name, e$message))
+      rep(NA, future_length)
+    })
+    
+    # Store forecast results
+    forecast_list[[v]] <- tibble(!!paste0("predicted_", var_name) := as.numeric(future_forecast))
+  }
+  
+  # Combine forecasts for this location into a single data frame
+  loc_results <- bind_cols(
+    tibble(
+      latitude = unique(loc_data$latitude),
+      longitude = unique(loc_data$longitude),
+      time = future_times
+    ),
+    bind_cols(forecast_list)
+  )
+  
+  # Add the location's results to the results list
+  results[[i]] <- loc_results
+}
+
+# Combine all locations into a single data frame
+forecast_results <- bind_rows(results)
+
+# Output forecast results (in a reactive context, assign this to a reactiveVal)
+forecast_results
+
+# Step 1: Filter Actual Data for January 2013
+actual_data_jan_2013 <- baltic_data_model |>
+  filter(year(time) == 2013, month(time) == 1) |>
+  select(latitude, longitude, time, sea_ice_concentration)
+
+# Step 2: Filter Predicted Data for January 2013
+forecast_results_jan_2013 <- forecast_results |>
+  filter(year(time) == 2013, month(time) == 1) |>
+  select(latitude, longitude, time, predicted_sea_ice_concentration)
+
+# Ensure both dataframes are sorted consistently
+forecast_results_jan_2013 <- forecast_results_jan_2013 |>
+  arrange(latitude, longitude, time)
+
+actual_data_jan_2013 <- actual_data_jan_2013 |>
+  arrange(latitude, longitude, time)
+
+# Step 3: Join Predicted and Actual Data
+comparison <- forecast_results_jan_2013 |>
+  inner_join(actual_data_jan_2013, by = c("latitude", "longitude", "time")) |>
+  rename(predicted = predicted_sea_ice_concentration, 
+         actual = sea_ice_concentration)
+
+# Step 4: Compute Metrics
+MAE <- mean(abs(comparison$predicted - comparison$actual), na.rm = TRUE)
+RMSE <- sqrt(mean((comparison$predicted - comparison$actual)^2, na.rm = TRUE))
+
+# Print Metrics
+cat("Mean Absolute Error (MAE):", MAE, "\n")
+cat("Root Mean Squared Error (RMSE):", RMSE, "\n")
+
+# Step 5: Visualization
+
+ggplot(comparison, aes(x = actual, y = predicted)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_abline(slope = 1, intercept = 0, color = "red") +
+  labs(
+    title = "Predicted vs. actual values (January 2013)",
+    x = "Actual value",
+    y = "Predicted value"
   ) +
   theme_minimal()
 

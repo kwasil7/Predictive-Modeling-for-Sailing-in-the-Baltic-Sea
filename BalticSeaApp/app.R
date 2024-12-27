@@ -17,9 +17,6 @@ library(ggiraph)
 baltic_data <- read_rds("baltic_data_for_shiny/baltic_data_model.rds")
 baltic_atmospheric_data <- read_rds("baltic_data_for_shiny/baltic_atmospheric_data.rds")
 
-# Glimpse the dataset in the console to confirm it's loaded
-print(glimpse(baltic_data))
-
 # Define UI
 ui <- navbarPage(
   title = "Baltic Sea Safety App",
