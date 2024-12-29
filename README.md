@@ -28,5 +28,39 @@ The primary dataset used in this project is from the [Copernicus Climate Data St
 
 ## User Guide
 
-- **Visualization**
-  You can view interactive safety maps that categorize the route into Safe, Risky, or Unsafe segments.
+**1. Accessing the Main Features**
+
+    Select a Tab
+        At the top of the application, you will see several tabs.
+        Atmospheric tab: Offers a finer resolution (0.25°) but fewer variables.
+        Route tab: Provides 0.5° resolution but includes all available variables.
+
+    Choose Your Points on the Map
+        Click anywhere on the displayed map to add route points.
+        You can add as many points as you like to outline your desired path.
+
+    Generate and Save the Route
+        Once you have placed your points, click the “Plot Route” button to visualize your path.
+        To store these points for later, click the “Save Route Points” button.
+
+**2. Setting Prediction Date Range**
+
+    Select the Forecast Period
+        In the designated panel, choose the start and end dates for which you want predictions.
+        This date range determines the timeframe over which the application will predict conditions.
+
+**3. Adjusting Visualization Settings**
+
+      Within the Visualization Settings, make sure to select the date corresponding to your chosen date range.
+
+**4. Interpreting Safety Maps**
+
+    Safety Categories
+        Once the route is plotted, the application will generate safety maps.
+        The path will be segmented into Safe, Risky, or Unsafe sections based on the predicted atmospheric and marine conditions.
+
+    Refine and Recalculate
+        If certain route segments are classified as Unsafe, consider adjusting the route points to avoid high-risk conditions.
+        Re-plot and re-save your route until you achieve a satisfactory safety profile.
+
+Tip: Always ensure your Visualization Settings and Date Range align.
