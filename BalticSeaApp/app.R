@@ -17,10 +17,6 @@ library(ggiraph)
 # baltic_data <- read_rds("baltic_data_for_shiny/baltic_data_model.rds")
 # baltic_atmospheric_data <- read_rds("baltic_data_for_shiny/baltic_atmospheric_data.rds")
 
-# Load the compressed datasets
-baltic_data <- readRDS("baltic_data_for_shiny_compressed/baltic_data_model_compressed.rds")
-baltic_atmospheric_data <- readRDS("baltic_data_for_shiny_compressed/baltic_atmospheric_data_compressed.rds")
-
 # Define UI
 ui <- navbarPage(
   title = "Baltic Sea Safety App",
@@ -370,6 +366,7 @@ ui <- navbarPage(
   # Tab 3: Historical Analysis
   tabPanel(
     "Historical Analysis",
+    value = "historical_tab",
     sidebarLayout(
       sidebarPanel(
         useShinyjs(),
@@ -602,9 +599,9 @@ ui <- navbarPage(
 library(zoo)
 library(TTR)
 library(paletteer)
-library(forecast)
 library(stats)
 library(ggstatsplot)
+library(ggthemes)
 
 # Use in a ggplot2 chart:
 scale_colour_paletteer_d("ggsci::light_blue_material")
@@ -756,6 +753,8 @@ server <- function(input, output, session) {
     req(atmos_points$route)
     req(atmos_points$route_saved)
     
+    baltic_atmospheric_data <- readRDS("baltic_data_for_shiny_compressed/baltic_atmospheric_data_compressed.rds")
+    
     # Forecast logic for atmospheric data...
     # Get the selected variables
     selected_vars <- atmos_selected_variables()
@@ -782,7 +781,6 @@ server <- function(input, output, session) {
         longitude %in% atmos_points$route$longitude,
         year(time) >= 2012 & year(time) < 2014
       )
-    print("Atmospheric training data filtered.")
     
     # Group by latitude and longitude
     grouped_data <- training_data |>
@@ -1378,8 +1376,8 @@ server <- function(input, output, session) {
       return()
     }
     
-    print("Using selected route for predictions...")
-    print("Starting predictions...")  # Debugging message
+    # Load the compressed dataset
+    baltic_data <- readRDS("baltic_data_for_shiny_compressed/baltic_data_model_compressed.rds")
     
     # Get the selected variables
     selected_vars <- route_selected_variables()
@@ -1406,7 +1404,6 @@ server <- function(input, output, session) {
         longitude %in% route_points$route$longitude,
         year(time) >= 2012 & year(time) < 2014
       )
-    print("Training data filtered.")
     
     # Group by latitude and longitude
     grouped_data <- training_data |>
@@ -1862,6 +1859,9 @@ server <- function(input, output, session) {
 
 # Plot tab ----------------------------------------------------------------
   
+  # Load the compressed dataset
+  baltic_data <- readRDS("baltic_data_for_shiny_compressed/baltic_data_model_compressed.rds")
+  
   # Reactive expression to filter the data based on the selected time range
   filtered_data <- reactive({
     baltic_data |>
@@ -1983,7 +1983,6 @@ server <- function(input, output, session) {
         legend.text = element_text(size = 12) 
       )
   })
-  
 
 # Download the thesis report ----------------------------------------------
 
