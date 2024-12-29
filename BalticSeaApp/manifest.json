@@ -2310,7 +2310,7 @@
         "Author": "Antoine Lucas [aut, cre] (<https://orcid.org/0000-0002-8059-9767>),\n  Immanuel Scholz [aut],\n  Rainer Boehme [ctb],\n  Sylvain Jasson [ctb],\n  Martin Maechler [ctb]",
         "Repository": "CRAN",
         "Date/Publication": "2024-08-23 18:40:02 UTC",
-        "Built": "R 4.4.2; x86_64-w64-mingw32; 2024-12-08 01:28:41 UTC; windows",
+        "Built": "R 4.4.2; x86_64-w64-mingw32; 2024-12-21 01:45:04 UTC; windows",
         "Archs": "x64"
       }
     },
