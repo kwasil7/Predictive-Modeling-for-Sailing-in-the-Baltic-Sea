@@ -14,8 +14,12 @@ library(DT)
 library(ggiraph)
 
 # Load the dataset during app initialization
-baltic_data <- read_rds("baltic_data_for_shiny/baltic_data_model.rds")
-baltic_atmospheric_data <- read_rds("baltic_data_for_shiny/baltic_atmospheric_data.rds")
+# baltic_data <- read_rds("baltic_data_for_shiny/baltic_data_model.rds")
+# baltic_atmospheric_data <- read_rds("baltic_data_for_shiny/baltic_atmospheric_data.rds")
+
+# Load the compressed datasets
+baltic_data <- readRDS("baltic_data_for_shiny_compressed/baltic_data_model_compressed.rds")
+baltic_atmospheric_data <- readRDS("baltic_data_for_shiny_compressed/baltic_atmospheric_data_compressed.rds")
 
 # Define UI
 ui <- navbarPage(
