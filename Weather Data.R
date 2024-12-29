@@ -200,7 +200,7 @@ baltic_atmospheric_data <- baltic_atmospheric_data |>
     .before = 1
   )
 
-baltic_atmospheric_data <- read_rds("baltic_data_for_shiny/baltic_atmospheric_data.rds")
+baltic_atmospheric_data <- readRDS("BalticSeaApp/baltic_data_for_shiny_compressed/baltic_atmospheric_data_compressed.rds")
 
 # Since wind speed is calculated u10 and v10 wind components are not needed
 baltic_atmospheric_data <- baltic_atmospheric_data |>
@@ -1017,7 +1017,7 @@ library(paletteer)
 library(lubridate)
 library(stats)
 
-baltic_data_model <- read_rds("../baltic_data_model.rds")
+baltic_data_model <- readRDS("BalticSeaApp/baltic_data_for_shiny_compressed/baltic_data_model_compressed.rds")
 
 # Saving compressed RDS files for Shiny app
 saveRDS(baltic_data_model, "baltic_data_model_compressed.rds", compress = TRUE)
