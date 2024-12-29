@@ -596,6 +596,7 @@ ui <- navbarPage(
   )
 )
 
+library(maps)
 library(zoo)
 library(TTR)
 library(paletteer)
@@ -1024,7 +1025,7 @@ server <- function(input, output, session) {
     atmos_forecast_results() |>
       ggplot(aes(x = time, y = predicted_wind_speed)) +
       geom_line(color = "blue") +
-      geom_smooth(se = FALSE, color = "orange", size = 1.5) +
+      geom_smooth(se = FALSE, color = "orange", linewidth = 1.5) +
       labs(
         x = "Time", 
         y = "Wind Speed [m/s]",
@@ -1642,7 +1643,7 @@ server <- function(input, output, session) {
     route_forecast_results() |>
       ggplot(aes(x = time, y = predicted_wind_speed)) +
       geom_line(color = "blue") +
-      geom_smooth(se = FALSE, color = "orange", size = 1.5) +
+      geom_smooth(se = FALSE, color = "orange", linewidth = 1.5) +
       labs(
         x = "Time", 
         y = "Wind speed [m/s]",
