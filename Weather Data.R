@@ -509,7 +509,9 @@ baltic_data_labeled <- baltic_data_labeled |>
     )
   )
 
-baltic_data_labeled <- read_rds("baltic_data_labeled.rds")
+# baltic_data_labeled <- read_rds("baltic_data_labeled.rds")
+
+baltic_data <- readRDS("BalticSeaApp/baltic_data_for_shiny_compressed/baltic_data_model_compressed.rds")
 
 # Plots -------------------------------------------------------------------
 library(openair)
@@ -526,7 +528,7 @@ scale_fill_paletteer_d("ggsci::light_blue_material")
 scale_color_paletteer_c("ggthemes::Blue-Teal")
 scale_fill_paletteer_c("ggthemes::Blue-Teal")
 
-baltic_data_labeled |>
+baltic_data |>
   ggplot(aes(x = beaufort_category, y = wind_speed, fill = safety_label)) +  # Change y to wind_speed if no safety score exists
   geom_boxplot(outlier.shape = 16, outlier.size = 2, alpha = 0.7) +
   labs(
@@ -541,7 +543,7 @@ baltic_data_labeled |>
     axis.text.x = element_text(angle = 45, hjust = 1)
   )
 
-baltic_data_labeled |>
+baltic_data |>
   ggplot(aes(x = wind_speed, fill = safety_label)) +  # Change x to wind_speed or another variable if no safety_score exists
   geom_histogram(binwidth = 1, alpha = 0.7, position = "identity") +
   labs(
@@ -555,7 +557,7 @@ baltic_data_labeled |>
     plot.title = element_text(hjust = 0.5)
   )
 
-baltic_data_labeled |>
+baltic_data |>
   ggplot(aes(x = beaufort_category, y = wind_speed, color = safety_label)) +  # wind_speed or appropriate variable
   geom_boxplot(alpha = 0.5) +
   geom_jitter(width = 0.2, size = 2, alpha = 0.7) +
@@ -1022,7 +1024,6 @@ baltic_data_model <- readRDS("BalticSeaApp/baltic_data_for_shiny_compressed/balt
 # Saving compressed RDS files for Shiny app
 saveRDS(baltic_data_model, "baltic_data_model_compressed.rds", compress = TRUE)
 saveRDS(baltic_atmospheric_data, "baltic_atmospheric_data_compressed.rds", compress = TRUE)
-
 
 # Define start and end points
 start <- c(18.0, 55.0)  # Longitude, Latitude
