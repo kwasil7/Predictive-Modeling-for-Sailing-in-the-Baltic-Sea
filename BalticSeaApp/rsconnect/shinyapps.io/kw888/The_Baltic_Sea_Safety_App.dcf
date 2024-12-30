@@ -5,7 +5,7 @@ account: kw888
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 13648034
-bundleId: 9582509
+bundleId: 9585021
 url: https://kw888.shinyapps.io/The_Baltic_Sea_Safety_App/
 version: 1
 asMultiple: FALSE
