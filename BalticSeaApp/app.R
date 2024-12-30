@@ -1992,7 +1992,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       # Google Drive direct link for exporting the Google Doc as a PDF
-      doc_link <- "https://drive.google.com/uc?export=download&id=1SkZsUZzP0UwnnVjCBqLb1wx2ywmSHjzN"
+      doc_link <- "https://drive.google.com/uc?export=download&id=1pEwiGaCao7yg3oBWVfMk-JsStPnpP344"
       
       # Download the file using httr
       httr::GET(url = doc_link, httr::write_disk(file, overwrite = TRUE))
