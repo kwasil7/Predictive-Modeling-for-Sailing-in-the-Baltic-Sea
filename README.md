@@ -65,7 +65,8 @@ The primary dataset used in this project is from the [Copernicus Climate Data St
 
 Tip: Always ensure your Visualization Settings and Date Range align.
 
-## The Shiny App <a href="https://kw888.shinyapps.io/The_Baltic_Sea_Safety_App/" target="_blank">here it is</a>
+## [The Shiny App](https://kw888.shinyapps.io/The_Baltic_Sea_Safety_App/)
 
 It will be available with full functionality until the 29th of January 2025.
 
+After that, it will still be available but due to free plan's RAM on shinyapps.io it won't have much functionality.
