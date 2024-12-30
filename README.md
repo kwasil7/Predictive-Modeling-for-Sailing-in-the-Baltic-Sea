@@ -64,3 +64,5 @@ The primary dataset used in this project is from the [Copernicus Climate Data St
   - Re-plot and re-save your route until you achieve a satisfactory safety profile.
 
 Tip: Always ensure your Visualization Settings and Date Range align.
+
+## The Shiny App [here it is](https://kw888.shinyapps.io/The_Baltic_Sea_Safety_App/)
